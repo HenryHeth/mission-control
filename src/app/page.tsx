@@ -40,50 +40,23 @@ export default function Home() {
         </div>
 
         <div className="top-nav__actions">
-          <button className="top-nav__action">
-            ⏸ Pause
-          </button>
-          <button className="top-nav__action">
-            Ping Henry
-          </button>
+          <button className="top-nav__action">⏸ Pause</button>
+          <button className="top-nav__action">Ping Henry</button>
         </div>
       </div>
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
         {activeTab === 'docs' && <DocsTab />}
-        {activeTab === 'tasks' && (
-          <div style={{ padding: 24 }}>
-            <div className="content-pane" style={{ padding: 24 }}>
-              <p style={{ color: '#666' }}>Task management coming soon...</p>
-            </div>
-          </div>
-        )}
-        {activeTab === 'projects' && (
-          <div style={{ padding: 24 }}>
-            <div className="content-pane" style={{ padding: 24 }}>
-              <p style={{ color: '#666' }}>Project tracking coming soon...</p>
-            </div>
-          </div>
-        )}
-        {activeTab === 'memory' && (
-          <div style={{ padding: 24 }}>
-            <div className="content-pane" style={{ padding: 24 }}>
-              <p style={{ color: '#666' }}>Memory browser coming soon...</p>
-            </div>
-          </div>
-        )}
-        {activeTab === 'captures' && (
-          <div style={{ padding: 24 }}>
-            <div className="content-pane" style={{ padding: 24 }}>
-              <p style={{ color: '#666' }}>Captures coming soon...</p>
-            </div>
-          </div>
-        )}
-        {activeTab === 'people' && (
-          <div style={{ padding: 24 }}>
-            <div className="content-pane" style={{ padding: 24 }}>
-              <p style={{ color: '#666' }}>People directory coming soon...</p>
+        {activeTab !== 'docs' && (
+          <div className="docs-layout">
+            <div className="content-empty">
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 8 }}>
+                  {tabs.find(t => t.id === activeTab)?.icon}
+                </div>
+                <div>{tabs.find(t => t.id === activeTab)?.name} coming soon...</div>
+              </div>
             </div>
           </div>
         )}

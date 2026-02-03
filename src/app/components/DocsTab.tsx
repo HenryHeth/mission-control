@@ -16,7 +16,7 @@ interface FileInfo {
 
 interface FileContent {
   filename: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   content: string;
   lastModified: string;
 }
@@ -90,7 +90,7 @@ export default function DocsTab() {
       const data = await res.json();
       setFiles(data.files || []);
     } catch (e) {
-      console.error(e);
+      console.error('Failed to fetch files:', e);
     } finally {
       setLoading(false);
     }
@@ -103,7 +103,7 @@ export default function DocsTab() {
       const res = await fetch(`/api/docs?file=${encodeURIComponent(name)}`);
       setFileContent(await res.json());
     } catch (e) {
-      console.error(e);
+      console.error('Failed to load file:', e);
     } finally {
       setContentLoading(false);
     }
@@ -111,22 +111,38 @@ export default function DocsTab() {
 
   const toggleTag = (t: string) =>
     setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
-  
+
   const toggleType = (t: string) =>
     setActiveTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
 
   if (loading) {
-    return <div className="content-empty"><span>Loading documents...</span></div>;
+    return (
+      <div className="docs-layout">
+        <div className="content-empty"><span className="loading-text">Loading documents...</span></div>
+      </div>
+    );
   }
 
   return (
-    <>
+    <div className="docs-layout">
       {/* Sidebar */}
       <div className="docs-sidebar">
         {/* Search */}
-        <div className="docs-sidebar__search" style={{ position: 'relative' }}>
-          <svg className="docs-sidebar__search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+        <div className="docs-sidebar__search">
+          <svg
+            className="docs-sidebar__search-icon"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ width: 13, height: 13 }}
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
           </svg>
           <input
             className="docs-sidebar__input"
@@ -203,7 +219,7 @@ export default function DocsTab() {
             <div className="content-header">
               <div className="content-header__title">
                 <span className="content-header__filename">{selectedFile}</span>
-                {fileContent.metadata?.tags?.map((tag: string) => (
+                {(fileContent.metadata?.tags as string[])?.map((tag: string) => (
                   <span key={tag} className={`tag-badge ${getTagClass(tag)}`}>{tag}</span>
                 ))}
               </div>
@@ -217,7 +233,7 @@ export default function DocsTab() {
             </div>
             <div className="content-body">
               {contentLoading ? (
-                <div className="content-empty"><span>Loading...</span></div>
+                <div className="content-empty"><span className="loading-text">Loading...</span></div>
               ) : (
                 <div className="md-content">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -231,11 +247,11 @@ export default function DocsTab() {
           <div className="content-empty">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 8 }}>📄</div>
-              <div style={{ fontSize: 13 }}>Select a document</div>
+              <div>Select a document</div>
             </div>
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
