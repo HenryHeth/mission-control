@@ -249,10 +249,9 @@ export default function DocsTab() {
                   <div className="text-gray-400">Loading content...</div>
                 </div>
               ) : (
-                <div className="prose prose-invert max-w-none">
+                <div className="prose prose-invert max-w-none text-gray-100">
                   <ReactMarkdown 
                     remarkPlugins={[remarkGfm]}
-                    className="text-gray-100"
                     components={{
                       h1: ({children}) => <h1 className="text-2xl font-bold mb-4 text-white border-b border-gray-600 pb-2">{children}</h1>,
                       h2: ({children}) => <h2 className="text-xl font-semibold mb-3 text-white mt-6">{children}</h2>,
