@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Mission Control",
-  description: "Mission Control v1 - Research reports, tasks, and memory management",
+  description: "Mission Control — Single pane of glass",
 };
 
 export default function RootLayout({
@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-gray-900 text-gray-100 antialiased">
+    <html lang="en">
+      <body>
         {children}
       </body>
     </html>

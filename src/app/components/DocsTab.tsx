@@ -21,6 +21,42 @@ interface FileContent {
   lastModified: string;
 }
 
+function getTagClass(tag: string): string {
+  const t = tag.toLowerCase();
+  if (t === 'journal' || t === 'daily') return 'tag-badge--journal';
+  if (t === 'research') return 'tag-badge--research';
+  if (t === 'design') return 'tag-badge--design';
+  if (t === 'meeting') return 'tag-badge--meeting';
+  if (t === 'memory' || t === 'notes') return 'tag-badge--notes';
+  if (t === 'call' || t === 'transcript') return 'tag-badge--call';
+  return 'tag-badge--other';
+}
+
+function timeAgo(dateString: string): string {
+  const d = new Date(dateString);
+  const now = new Date();
+  const ms = now.getTime() - d.getTime();
+  const mins = Math.floor(ms / 60000);
+  const hrs = Math.floor(ms / 3600000);
+  const days = Math.floor(ms / 86400000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hrs < 24) return `about ${hrs} hours ago`;
+  if (days === 1) return '1 day ago';
+  if (days < 30) return `${days} days ago`;
+  return `${Math.floor(days / 30)} months ago`;
+}
+
+function wordCount(s: string): number {
+  return s.split(/\s+/).filter(Boolean).length;
+}
+
+function fmtSize(b: number): string {
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+  return (b / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
 export default function DocsTab() {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -28,222 +64,163 @@ export default function DocsTab() {
   const [loading, setLoading] = useState(true);
   const [contentLoading, setContentLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [activeTags, setActiveTags] = useState<string[]>([]);
+  const [activeTypes, setActiveTypes] = useState<string[]>([]);
 
-  const allTags = Array.from(
-    new Set(files.flatMap(file => file.tags))
-  ).sort();
+  const allTags = Array.from(new Set(files.flatMap(f => f.tags))).sort();
+  const allTypes = Array.from(new Set(files.map(f => {
+    const ext = f.name.split('.').pop()?.toLowerCase();
+    return ext ? '.' + ext : '';
+  }))).filter(Boolean).sort();
 
-  const filteredFiles = files.filter(file => {
-    const matchesSearch = file.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         file.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTags = selectedTags.length === 0 || 
-                       selectedTags.some(tag => file.tags.includes(tag));
-    return matchesSearch && matchesTags;
+  const filtered = files.filter(f => {
+    const q = searchTerm.toLowerCase();
+    const matchQ = !q || f.title.toLowerCase().includes(q) || f.name.toLowerCase().includes(q);
+    const matchTag = activeTags.length === 0 || activeTags.some(t => f.tags.includes(t));
+    const ext = '.' + (f.name.split('.').pop()?.toLowerCase() || '');
+    const matchType = activeTypes.length === 0 || activeTypes.includes(ext);
+    return matchQ && matchTag && matchType;
   });
 
-  useEffect(() => {
-    fetchFiles();
-  }, []);
+  useEffect(() => { fetchFiles(); }, []);
 
   const fetchFiles = async () => {
     try {
-      const response = await fetch('/api/docs');
-      const data = await response.json();
+      const res = await fetch('/api/docs');
+      const data = await res.json();
       setFiles(data.files || []);
-    } catch (error) {
-      console.error('Error fetching files:', error);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchFileContent = async (filename: string) => {
+  const selectFile = async (name: string) => {
+    setSelectedFile(name);
     setContentLoading(true);
     try {
-      const response = await fetch(`/api/docs?file=${encodeURIComponent(filename)}`);
-      const data = await response.json();
-      setFileContent(data);
-    } catch (error) {
-      console.error('Error fetching file content:', error);
+      const res = await fetch(`/api/docs?file=${encodeURIComponent(name)}`);
+      setFileContent(await res.json());
+    } catch (e) {
+      console.error(e);
     } finally {
       setContentLoading(false);
     }
   };
 
-  const handleFileSelect = (filename: string) => {
-    setSelectedFile(filename);
-    fetchFileContent(filename);
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev => 
-      prev.includes(tag) 
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    );
-  };
+  const toggleTag = (t: string) =>
+    setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  
+  const toggleType = (t: string) =>
+    setActiveTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-gray-500">Loading documents...</div>
-      </div>
-    );
+    return <div className="content-empty"><span>Loading documents...</span></div>;
   }
 
   return (
-    <div className="flex h-full">
-      {/* Left sidebar: search + tags + file list */}
-      <div className="w-64 border-r border-[#2a2a2e] flex flex-col bg-[#111113]">
+    <>
+      {/* Sidebar */}
+      <div className="docs-sidebar">
         {/* Search */}
-        <div className="p-3">
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">🔍</span>
-            <input
-              type="text"
-              placeholder="Search documents..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 bg-[#1a1a1e] border border-[#2a2a2e] rounded-md text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-[#444]"
-            />
-          </div>
+        <div className="docs-sidebar__search" style={{ position: 'relative' }}>
+          <svg className="docs-sidebar__search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+          </svg>
+          <input
+            className="docs-sidebar__input"
+            placeholder="Search documents..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
         </div>
 
-        {/* Tag chips */}
+        {/* Tag filters */}
         {allTags.length > 0 && (
-          <div className="px-3 pb-3">
-            <div className="flex flex-wrap gap-1.5">
-              {allTags.map(tag => (
-                <button
-                  key={tag}
-                  onClick={() => toggleTag(tag)}
-                  className={`tag-chip ${selectedTags.includes(tag) ? 'active' : ''}`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
+          <div className="docs-sidebar__filters">
+            {allTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                className={`filter-chip ${activeTags.includes(tag) ? 'filter-chip--active' : ''}`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* File type filters */}
+        {allTypes.length > 0 && (
+          <div className="docs-sidebar__filters">
+            {allTypes.map(type => (
+              <button
+                key={type}
+                onClick={() => toggleType(type)}
+                className={`filter-chip filter-chip--type ${activeTypes.includes(type) ? 'filter-chip--active' : ''}`}
+              >
+                {type}
+              </button>
+            ))}
           </div>
         )}
 
         {/* File list */}
-        <div className="flex-1 overflow-y-auto border-t border-[#2a2a2e]">
-          <div className="p-1.5 space-y-0.5">
-            {filteredFiles.map((file) => (
-              <div
-                key={file.name}
-                onClick={() => handleFileSelect(file.name)}
-                className={`px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
-                  selectedFile === file.name
-                    ? 'bg-[#2a2a30] text-white'
-                    : 'text-gray-400 hover:bg-[#1a1a1e] hover:text-gray-200'
-                }`}
-              >
-                <div className="text-sm font-medium truncate">
-                  {file.title}
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[0.6875rem] text-gray-600">
-                    {formatDate(file.lastModified)}
-                  </span>
-                  <span className="text-[0.6875rem] text-gray-600">·</span>
-                  <span className="text-[0.6875rem] text-gray-600">
-                    {formatFileSize(file.size)}
-                  </span>
+        <div className="docs-sidebar__list">
+          {filtered.map(file => (
+            <div
+              key={file.name}
+              onClick={() => selectFile(file.name)}
+              className={`file-item ${selectedFile === file.name ? 'file-item--selected' : ''}`}
+            >
+              <div className="file-item__dot" />
+              <div className="file-item__info">
+                <div className="file-item__name">{file.name}</div>
+                <div className="file-item__meta">
+                  {file.tags[0] && (
+                    <span className={`tag-badge ${getTagClass(file.tags[0])}`}>
+                      {file.tags[0]}
+                    </span>
+                  )}
+                  <span className="file-item__date">{timeAgo(file.lastModified)}</span>
                 </div>
               </div>
-            ))}
-            {filteredFiles.length === 0 && (
-              <div className="p-4 text-center text-gray-600 text-sm">
-                {searchTerm || selectedTags.length > 0 
-                  ? 'No files match' 
-                  : 'No documents found'}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-3 py-2 border-t border-[#2a2a2e] text-[0.6875rem] text-gray-600">
-          {filteredFiles.length} of {files.length} files
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div style={{ padding: 16, textAlign: 'center', color: '#555', fontSize: 13 }}>
+              {searchTerm || activeTags.length || activeTypes.length ? 'No files match' : 'No documents'}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Right: Content pane */}
-      <div className="flex-1 flex flex-col bg-[#111113]">
+      {/* Content */}
+      <div className="content-area">
         {selectedFile && fileContent ? (
           <>
-            {/* Content header */}
-            <div className="px-6 py-4 border-b border-[#2a2a2e]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-semibold text-white">
-                    {fileContent.metadata.title || selectedFile.replace('.md', '')}
-                  </h3>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {formatDate(fileContent.lastModified)}
-                  </div>
-                </div>
-                {fileContent.metadata.tags && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {fileContent.metadata.tags.map((tag: string) => (
-                      <span
-                        key={tag}
-                        className="tag-chip"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
+            <div className="content-header">
+              <div className="content-header__title">
+                <span className="content-header__filename">{selectedFile}</span>
+                {fileContent.metadata?.tags?.map((tag: string) => (
+                  <span key={tag} className={`tag-badge ${getTagClass(tag)}`}>{tag}</span>
+                ))}
+              </div>
+              <div className="content-header__meta">
+                <span>{fmtSize(fileContent.content?.length || 0)}</span>
+                <span>·</span>
+                <span>{wordCount(fileContent.content || '').toLocaleString()} words</span>
+                <span>·</span>
+                <span>Modified {timeAgo(fileContent.lastModified)}</span>
               </div>
             </div>
-
-            {/* Content body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="content-body">
               {contentLoading ? (
-                <div className="flex items-center justify-center h-64">
-                  <div className="text-gray-500">Loading...</div>
-                </div>
+                <div className="content-empty"><span>Loading...</span></div>
               ) : (
-                <div className="prose prose-invert max-w-none text-gray-300 text-sm leading-relaxed">
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      h1: ({children}) => <h1 className="text-xl font-bold mb-4 text-white border-b border-[#2a2a2e] pb-2">{children}</h1>,
-                      h2: ({children}) => <h2 className="text-lg font-semibold mb-3 text-white mt-6">{children}</h2>,
-                      h3: ({children}) => <h3 className="text-base font-medium mb-2 text-gray-200 mt-4">{children}</h3>,
-                      p: ({children}) => <p className="mb-3 text-gray-300 leading-relaxed">{children}</p>,
-                      ul: ({children}) => <ul className="list-disc list-inside mb-3 space-y-1 text-gray-300">{children}</ul>,
-                      ol: ({children}) => <ol className="list-decimal list-inside mb-3 space-y-1 text-gray-300">{children}</ol>,
-                      blockquote: ({children}) => <blockquote className="border-l-2 border-[#444] pl-4 italic mb-3 text-gray-400">{children}</blockquote>,
-                      code: ({children}) => <code className="bg-[#1a1a1e] px-1.5 py-0.5 rounded text-[#93b4f0] text-xs">{children}</code>,
-                      pre: ({children}) => <pre className="bg-[#1a1a1e] p-4 rounded-md overflow-x-auto mb-3 border border-[#2a2a2e] text-xs">{children}</pre>,
-                      a: ({children, href}) => <a href={href} className="text-[#6ea1f0] hover:text-[#93b4f0] underline" target="_blank" rel="noopener noreferrer">{children}</a>,
-                      table: ({children}) => <table className="w-full border-collapse border border-[#2a2a2e] mb-3 text-xs">{children}</table>,
-                      th: ({children}) => <th className="border border-[#2a2a2e] px-3 py-2 bg-[#1a1a1e] text-left font-semibold text-gray-300">{children}</th>,
-                      td: ({children}) => <td className="border border-[#2a2a2e] px-3 py-2 text-gray-400">{children}</td>,
-                    }}
-                  >
+                <div className="md-content">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {fileContent.content}
                   </ReactMarkdown>
                 </div>
@@ -251,14 +228,14 @@ export default function DocsTab() {
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-600">
-            <div className="text-center">
-              <div className="text-4xl mb-3 opacity-40">📄</div>
-              <div className="text-sm">Select a document</div>
+          <div className="content-empty">
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 8 }}>📄</div>
+              <div style={{ fontSize: 13 }}>Select a document</div>
             </div>
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
