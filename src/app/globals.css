@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-gray-900 text-gray-100;
+  }
+}
+
+@layer components {
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors hover:bg-gray-800 cursor-pointer;
+  }
+  
+  .sidebar-item.active {
+    @apply bg-blue-600 text-white;
+  }
+  
+  .content-pane {
+    @apply bg-gray-800 rounded-lg border border-gray-700;
+  }
+  
+  .file-badge {
+    @apply inline-flex items-center px-2 py-1 text-xs font-medium rounded-full;
+  }
+  
+  .file-badge.md {
+    @apply bg-blue-900 text-blue-200;
+  }
+  
+  .file-badge.txt {
+    @apply bg-gray-700 text-gray-300;
+  }
+  
+  .file-badge.json {
+    @apply bg-green-900 text-green-200;
+  }
+}
