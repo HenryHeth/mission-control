@@ -2,38 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  body {
-    @apply bg-gray-900 text-gray-100;
-  }
+body {
+  background-color: rgb(17 24 39); /* gray-900 */
+  color: rgb(243 244 246); /* gray-100 */
 }
 
-@layer components {
-  .sidebar-item {
-    @apply flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors hover:bg-gray-800 cursor-pointer;
-  }
-  
-  .sidebar-item.active {
-    @apply bg-blue-600 text-white;
-  }
-  
-  .content-pane {
-    @apply bg-gray-800 rounded-lg border border-gray-700;
-  }
-  
-  .file-badge {
-    @apply inline-flex items-center px-2 py-1 text-xs font-medium rounded-full;
-  }
-  
-  .file-badge.md {
-    @apply bg-blue-900 text-blue-200;
-  }
-  
-  .file-badge.txt {
-    @apply bg-gray-700 text-gray-300;
-  }
-  
-  .file-badge.json {
-    @apply bg-green-900 text-green-200;
-  }
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+
+.sidebar-item:hover {
+  background-color: rgb(31 41 55); /* gray-800 */
+}
+
+.sidebar-item.active {
+  background-color: rgb(37 99 235); /* blue-600 */
+  color: rgb(255 255 255);
+}
+
+.content-pane {
+  background-color: rgb(31 41 55); /* gray-800 */
+  border-radius: 0.5rem;
+  border: 1px solid rgb(55 65 81); /* gray-700 */
+}
+
+.file-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 9999px;
+}
+
+.file-badge.md {
+  background-color: rgb(30 58 138); /* blue-900 */
+  color: rgb(191 219 254); /* blue-200 */
+}
+
+.file-badge.txt {
+  background-color: rgb(55 65 81); /* gray-700 */
+  color: rgb(209 213 219); /* gray-300 */
+}
+
+.file-badge.json {
+  background-color: rgb(20 83 45); /* green-900 */
+  color: rgb(187 247 208); /* green-200 */
 }
