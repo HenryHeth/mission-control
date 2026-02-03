@@ -1,0 +1,397 @@
+{
+  "files": [
+    {
+      "name": "voice-calling-architecture.md",
+      "path": "memory/voice-calling-architecture.md",
+      "size": 4493,
+      "lastModified": "2026-02-03T08:23:17.417Z",
+      "tags": [
+        "call",
+        "transcript"
+      ],
+      "title": "voice-calling-architecture",
+      "type": "md"
+    },
+    {
+      "name": "research_browser_automation.md",
+      "path": "memory/research_browser_automation.md",
+      "size": 1229,
+      "lastModified": "2026-02-03T08:23:00.276Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_browser_automation",
+      "type": "md"
+    },
+    {
+      "name": "research_home_assistant.md",
+      "path": "memory/research_home_assistant.md",
+      "size": 5205,
+      "lastModified": "2026-02-03T08:23:00.275Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_home_assistant",
+      "type": "md"
+    },
+    {
+      "name": "2026-01-31.md",
+      "path": "memory/2026-01-31.md",
+      "size": 7429,
+      "lastModified": "2026-02-03T08:23:00.271Z",
+      "tags": [
+        "daily",
+        "journal"
+      ],
+      "title": "2026-01-31",
+      "type": "md"
+    },
+    {
+      "name": "research_vvo_frameworks.md",
+      "path": "memory/research_vvo_frameworks.md",
+      "size": 14906,
+      "lastModified": "2026-02-03T08:23:00.269Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_vvo_frameworks",
+      "type": "md"
+    },
+    {
+      "name": "2026-01-30.md",
+      "path": "memory/2026-01-30.md",
+      "size": 1992,
+      "lastModified": "2026-02-03T08:23:00.262Z",
+      "tags": [
+        "daily",
+        "journal"
+      ],
+      "title": "2026-01-30",
+      "type": "md"
+    },
+    {
+      "name": "2026-01-30-github-dashboard.md",
+      "path": "memory/2026-01-30-github-dashboard.md",
+      "size": 1571,
+      "lastModified": "2026-02-03T08:23:00.255Z",
+      "tags": [
+        "other"
+      ],
+      "title": "2026-01-30-github-dashboard",
+      "type": "md"
+    },
+    {
+      "name": "research_rescuetime.md",
+      "path": "memory/research_rescuetime.md",
+      "size": 4171,
+      "lastModified": "2026-02-03T08:23:00.253Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_rescuetime",
+      "type": "md"
+    },
+    {
+      "name": "2026-02-01.md",
+      "path": "memory/2026-02-01.md",
+      "size": 32619,
+      "lastModified": "2026-02-03T08:23:00.251Z",
+      "tags": [
+        "daily",
+        "journal"
+      ],
+      "title": "2026-02-01",
+      "type": "md"
+    },
+    {
+      "name": "research_dashboard_enhancements.md",
+      "path": "memory/research_dashboard_enhancements.md",
+      "size": 4609,
+      "lastModified": "2026-02-03T08:23:00.227Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_dashboard_enhancements",
+      "type": "md"
+    },
+    {
+      "name": "meeting_2026-02-02_task_review.md",
+      "path": "memory/meeting_2026-02-02_task_review.md",
+      "size": 6318,
+      "lastModified": "2026-02-03T08:23:00.174Z",
+      "tags": [
+        "meeting"
+      ],
+      "title": "meeting_2026-02-02_task_review",
+      "type": "md"
+    },
+    {
+      "name": "research_system_architecture.md",
+      "path": "memory/research_system_architecture.md",
+      "size": 8525,
+      "lastModified": "2026-02-03T08:23:00.129Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_system_architecture",
+      "type": "md"
+    },
+    {
+      "name": "research_video_UTCi_q6iuCM.md",
+      "path": "memory/research_video_UTCi_q6iuCM.md",
+      "size": 4794,
+      "lastModified": "2026-02-03T08:23:00.073Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_video_UTCi_q6iuCM",
+      "type": "md"
+    },
+    {
+      "name": "research_anthropic_auth.md",
+      "path": "memory/research_anthropic_auth.md",
+      "size": 1883,
+      "lastModified": "2026-02-03T08:23:00.043Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_anthropic_auth",
+      "type": "md"
+    },
+    {
+      "name": "research_agent_reliability.md",
+      "path": "memory/research_agent_reliability.md",
+      "size": 15613,
+      "lastModified": "2026-02-03T08:22:59.984Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_agent_reliability",
+      "type": "md"
+    },
+    {
+      "name": "research_youtube_filter.md",
+      "path": "memory/research_youtube_filter.md",
+      "size": 5626,
+      "lastModified": "2026-02-03T08:22:59.983Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_youtube_filter",
+      "type": "md"
+    },
+    {
+      "name": "research_qmd_memory.md",
+      "path": "memory/research_qmd_memory.md",
+      "size": 3368,
+      "lastModified": "2026-02-03T08:22:59.981Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_qmd_memory",
+      "type": "md"
+    },
+    {
+      "name": "2026-02-02_pre_compaction_context.md",
+      "path": "memory/2026-02-02_pre_compaction_context.md",
+      "size": 2535,
+      "lastModified": "2026-02-03T08:22:59.980Z",
+      "tags": [
+        "other"
+      ],
+      "title": "2026-02-02_pre_compaction_context",
+      "type": "md"
+    },
+    {
+      "name": "weekly-planning-process.md",
+      "path": "memory/weekly-planning-process.md",
+      "size": 2179,
+      "lastModified": "2026-02-03T08:22:59.979Z",
+      "tags": [
+        "other"
+      ],
+      "title": "weekly-planning-process",
+      "type": "md"
+    },
+    {
+      "name": "research_voice_calling.md",
+      "path": "memory/research_voice_calling.md",
+      "size": 12719,
+      "lastModified": "2026-02-03T08:22:59.978Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_voice_calling",
+      "type": "md"
+    },
+    {
+      "name": "voice-ngrok-permanent-setup.md",
+      "path": "memory/voice-ngrok-permanent-setup.md",
+      "size": 5952,
+      "lastModified": "2026-02-03T08:22:59.977Z",
+      "tags": [
+        "other"
+      ],
+      "title": "voice-ngrok-permanent-setup",
+      "type": "md"
+    },
+    {
+      "name": "2026-01-29.md",
+      "path": "memory/2026-01-29.md",
+      "size": 343,
+      "lastModified": "2026-02-03T08:22:59.976Z",
+      "tags": [
+        "daily",
+        "journal"
+      ],
+      "title": "2026-01-29",
+      "type": "md"
+    },
+    {
+      "name": "2026-02-03.md",
+      "path": "memory/2026-02-03.md",
+      "size": 7905,
+      "lastModified": "2026-02-03T08:22:59.975Z",
+      "tags": [
+        "daily",
+        "journal"
+      ],
+      "title": "2026-02-03",
+      "type": "md"
+    },
+    {
+      "name": "2026-02-02.md",
+      "path": "memory/2026-02-02.md",
+      "size": 65925,
+      "lastModified": "2026-02-03T08:22:59.974Z",
+      "tags": [
+        "daily",
+        "journal"
+      ],
+      "title": "2026-02-02",
+      "type": "md"
+    },
+    {
+      "name": "design_call_script_viewer.md",
+      "path": "memory/design_call_script_viewer.md",
+      "size": 3551,
+      "lastModified": "2026-02-03T08:22:59.973Z",
+      "tags": [
+        "design"
+      ],
+      "title": "design_call_script_viewer",
+      "type": "md"
+    },
+    {
+      "name": "research_espar_5ws_maintenance.md",
+      "path": "memory/research_espar_5ws_maintenance.md",
+      "size": 21698,
+      "lastModified": "2026-02-03T08:22:59.972Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_espar_5ws_maintenance",
+      "type": "md"
+    },
+    {
+      "name": "research_morning_email.md",
+      "path": "memory/research_morning_email.md",
+      "size": 3377,
+      "lastModified": "2026-02-03T08:22:59.971Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_morning_email",
+      "type": "md"
+    },
+    {
+      "name": "research_tesla_integration.md",
+      "path": "memory/research_tesla_integration.md",
+      "size": 10224,
+      "lastModified": "2026-02-03T08:22:59.970Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_tesla_integration",
+      "type": "md"
+    },
+    {
+      "name": "research_integrations.md",
+      "path": "memory/research_integrations.md",
+      "size": 1263,
+      "lastModified": "2026-02-03T08:22:59.969Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_integrations",
+      "type": "md"
+    },
+    {
+      "name": "design_mission_control.md",
+      "path": "memory/design_mission_control.md",
+      "size": 2933,
+      "lastModified": "2026-02-03T08:22:59.967Z",
+      "tags": [
+        "design"
+      ],
+      "title": "design_mission_control",
+      "type": "md"
+    },
+    {
+      "name": "research_video_review.md",
+      "path": "memory/research_video_review.md",
+      "size": 3327,
+      "lastModified": "2026-02-03T08:22:59.938Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_video_review",
+      "type": "md"
+    },
+    {
+      "name": "deployment_plan.md",
+      "path": "memory/deployment_plan.md",
+      "size": 1905,
+      "lastModified": "2026-02-03T08:22:59.905Z",
+      "tags": [
+        "other"
+      ],
+      "title": "deployment_plan",
+      "type": "md"
+    },
+    {
+      "name": "research_task_management.md",
+      "path": "memory/research_task_management.md",
+      "size": 4143,
+      "lastModified": "2026-02-03T08:22:59.887Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_task_management",
+      "type": "md"
+    },
+    {
+      "name": "memory-architecture-design.md",
+      "path": "memory/memory-architecture-design.md",
+      "size": 3230,
+      "lastModified": "2026-02-03T08:22:59.886Z",
+      "tags": [
+        "memory",
+        "notes"
+      ],
+      "title": "memory-architecture-design",
+      "type": "md"
+    },
+    {
+      "name": "research_voice_platforms.md",
+      "path": "memory/research_voice_platforms.md",
+      "size": 6864,
+      "lastModified": "2026-02-03T08:22:59.884Z",
+      "tags": [
+        "research"
+      ],
+      "title": "research_voice_platforms",
+      "type": "md"
+    }
+  ]
+}
