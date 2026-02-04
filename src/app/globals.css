@@ -326,6 +326,9 @@ body {
 .tag-badge--call { background: #4a2a2a; color: #e08080; }
 .tag-badge--transcript { background: #4a2a2a; color: #e08080; }
 .tag-badge--other { background: #2a2a2e; color: #888; }
+.tag-badge--config { background: #2a2a4a; color: #8888e0; }
+.tag-badge--workspace { background: #2a2a4a; color: #8888e0; }
+.tag-badge--telegram { background: #1a3a4a; color: #60b0e0; }
 
 .file-item__date {
   font-size: 10px;
@@ -538,6 +541,75 @@ body {
   background: #1a1a1e;
   border-radius: 8px;
   border: 1px solid #2a2a2c;
+}
+
+/* ── Source Indicator ── */
+.docs-sidebar__source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2a2a2c;
+  font-size: 11px;
+}
+
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.source-badge--live {
+  background: #1a3a1a;
+  color: #60d060;
+}
+
+.source-badge--bundled {
+  background: #3a3a1a;
+  color: #d0c060;
+}
+
+.source-badge--checking {
+  background: #2a2a2e;
+  color: #888;
+}
+
+.source-count {
+  color: #555;
+  font-size: 10px;
+}
+
+.source-refresh {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.12s;
+  font-family: inherit;
+}
+
+.source-refresh:hover {
+  color: #aaa;
+}
+
+/* ── File Path (subdirectory indicator) ── */
+.file-item__path {
+  font-size: 10px;
+  color: #444;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
 }
 
 /* ── Loading ── */

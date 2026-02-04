@@ -1,8 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+// --- Live API Configuration ---
+// The file-server.js serves files directly from disk.
+// Set this to your file server's public URL (e.g., via Cloudflare tunnel, ngrok, etc.)
+// Falls back to bundled /api/docs if unreachable.
+const LIVE_API_URL = process.env.NEXT_PUBLIC_LIVE_API_URL || 'http://localhost:3456';
 
 interface FileInfo {
   name: string;
@@ -19,7 +25,10 @@ interface FileContent {
   metadata: Record<string, unknown>;
   content: string;
   lastModified: string;
+  source?: string;
 }
+
+type DataSource = 'live' | 'bundled' | 'checking';
 
 function getTagClass(tag: string): string {
   const t = tag.toLowerCase();
@@ -29,6 +38,8 @@ function getTagClass(tag: string): string {
   if (t === 'meeting') return 'tag-badge--meeting';
   if (t === 'memory' || t === 'notes') return 'tag-badge--notes';
   if (t === 'call' || t === 'transcript') return 'tag-badge--call';
+  if (t === 'config' || t === 'workspace') return 'tag-badge--config';
+  if (t === 'telegram') return 'tag-badge--telegram';
   return 'tag-badge--other';
 }
 
@@ -66,6 +77,8 @@ export default function DocsTab() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeTypes, setActiveTypes] = useState<string[]>([]);
+  const [dataSource, setDataSource] = useState<DataSource>('checking');
+  const [liveApiAvailable, setLiveApiAvailable] = useState<boolean | null>(null);
 
   const allTags = Array.from(new Set(files.flatMap(f => f.tags))).sort();
   const allTypes = Array.from(new Set(files.map(f => {
@@ -75,45 +88,113 @@ export default function DocsTab() {
 
   const filtered = files.filter(f => {
     const q = searchTerm.toLowerCase();
-    const matchQ = !q || f.title.toLowerCase().includes(q) || f.name.toLowerCase().includes(q);
+    const matchQ = !q || f.title.toLowerCase().includes(q) || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q);
     const matchTag = activeTags.length === 0 || activeTags.some(t => f.tags.includes(t));
     const ext = '.' + (f.name.split('.').pop()?.toLowerCase() || '');
     const matchType = activeTypes.length === 0 || activeTypes.includes(ext);
     return matchQ && matchTag && matchType;
   });
 
-  useEffect(() => { fetchFiles(); }, []);
-
-  const fetchFiles = async () => {
+  // Try live API first, fall back to bundled
+  const fetchFiles = useCallback(async () => {
+    // Try live API
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${LIVE_API_URL}/api/files`, { signal: controller.signal });
+      clearTimeout(timeout);
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.files && data.source === 'live') {
+          setFiles(data.files);
+          setDataSource('live');
+          setLiveApiAvailable(true);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      // Live API unreachable — fall through to bundled
+    }
+
+    // Fallback: bundled /api/docs
+    try {
+      setLiveApiAvailable(false);
       const res = await fetch('/api/docs');
       const data = await res.json();
       setFiles(data.files || []);
+      setDataSource('bundled');
     } catch (e) {
-      console.error('Failed to fetch files:', e);
+      console.error('Failed to fetch files from both sources:', e);
+      setFiles([]);
+      setDataSource('bundled');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const selectFile = async (name: string) => {
-    setSelectedFile(name);
+  const selectFile = async (filePath: string) => {
+    setSelectedFile(filePath);
     setContentLoading(true);
+
+    // Try live API first if available
+    if (liveApiAvailable) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(`${LIVE_API_URL}/api/files/${encodeURIComponent(filePath)}`, { signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const data = await res.json();
+          setFileContent(data);
+          setContentLoading(false);
+          return;
+        }
+      } catch {
+        // Fall through to bundled
+      }
+    }
+
+    // Fallback: bundled API
+    // The bundled API uses filename (just the name), not full path
+    const name = filePath.includes('/') ? filePath.split('/').pop()! : filePath;
     try {
       const res = await fetch(`/api/docs?file=${encodeURIComponent(name)}`);
-      setFileContent(await res.json());
+      if (res.ok) {
+        setFileContent(await res.json());
+      } else {
+        setFileContent(null);
+      }
     } catch (e) {
       console.error('Failed to load file:', e);
+      setFileContent(null);
     } finally {
       setContentLoading(false);
     }
   };
+
+  // Auto-refresh file list every 30s when live API is available
+  useEffect(() => {
+    fetchFiles();
+    const interval = setInterval(() => {
+      if (liveApiAvailable) fetchFiles();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchFiles, liveApiAvailable]);
 
   const toggleTag = (t: string) =>
     setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
 
   const toggleType = (t: string) =>
     setActiveTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+
+  // Manual refresh
+  const handleRefresh = () => {
+    setLoading(true);
+    fetchFiles();
+  };
 
   if (loading) {
     return (
@@ -127,6 +208,15 @@ export default function DocsTab() {
     <div className="docs-layout">
       {/* Sidebar */}
       <div className="docs-sidebar">
+        {/* Source indicator + refresh */}
+        <div className="docs-sidebar__source">
+          <span className={`source-badge source-badge--${dataSource}`}>
+            {dataSource === 'live' ? '🟢 Live' : dataSource === 'bundled' ? '🟡 Bundled' : '⏳ Checking...'}
+          </span>
+          <span className="source-count">{files.length} files</span>
+          <button className="source-refresh" onClick={handleRefresh} title="Refresh file list">↻</button>
+        </div>
+
         {/* Search */}
         <div className="docs-sidebar__search">
           <svg
@@ -186,13 +276,16 @@ export default function DocsTab() {
         <div className="docs-sidebar__list">
           {filtered.map(file => (
             <div
-              key={file.name}
-              onClick={() => selectFile(file.name)}
-              className={`file-item ${selectedFile === file.name ? 'file-item--selected' : ''}`}
+              key={file.path}
+              onClick={() => selectFile(file.path)}
+              className={`file-item ${selectedFile === file.path ? 'file-item--selected' : ''}`}
             >
               <div className="file-item__dot" />
               <div className="file-item__info">
                 <div className="file-item__name">{file.name}</div>
+                {file.path.includes('/') && (
+                  <div className="file-item__path">{file.path}</div>
+                )}
                 <div className="file-item__meta">
                   {file.tags[0] && (
                     <span className={`tag-badge ${getTagClass(file.tags[0])}`}>
@@ -218,7 +311,10 @@ export default function DocsTab() {
           <>
             <div className="content-header">
               <div className="content-header__title">
-                <span className="content-header__filename">{selectedFile}</span>
+                <span className="content-header__filename">{fileContent.filename || selectedFile}</span>
+                {fileContent.source === 'live' && (
+                  <span className="source-badge source-badge--live" style={{ fontSize: 10, marginLeft: 8 }}>LIVE</span>
+                )}
                 {(fileContent.metadata?.tags as string[])?.map((tag: string) => (
                   <span key={tag} className={`tag-badge ${getTagClass(tag)}`}>{tag}</span>
                 ))}
@@ -248,6 +344,11 @@ export default function DocsTab() {
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 8 }}>📄</div>
               <div>Select a document</div>
+              {dataSource === 'bundled' && (
+                <div style={{ fontSize: 11, color: '#666', marginTop: 8 }}>
+                  ⚠️ Showing bundled files (live server unavailable)
+                </div>
+              )}
             </div>
           </div>
         )}

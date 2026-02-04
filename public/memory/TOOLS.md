@@ -63,6 +63,7 @@ browser.disconnect(); // NOT browser.close()
   - **Affects:** Only `gmail send` + `paul@heth.ca`. All other gog commands (search, calendar, henry@heth.ca sends) pass through unchanged.
   - **Location:** `/Users/henry_notabot/clawd/scripts/gog-safe`
   - **If removed/broken:** The alias in ~/.zshrc must be restored. Without it, there's no safety net.
+- **ALWAYS CC paul@heth.ca** on any outbound email to third parties
 - **ALWAYS reply in-thread** — never compose fresh when responding to an existing email:
   ```
   gog gmail send --to "recipient" --subject "Re: ..." --body "..." \
