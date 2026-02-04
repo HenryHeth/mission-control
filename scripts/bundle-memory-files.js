@@ -95,9 +95,52 @@ function processMemoryFiles() {
   });
 }
 
+// Also bundle root workspace config files (TOOLS.md, SOUL.md, etc.)
+function bundleRootConfigs() {
+  const CLAWD_ROOT = path.join(__dirname, '..', '..'); // /Users/henry_notabot/clawd
+  const ROOT_FILES = ['TOOLS.md', 'SOUL.md', 'AGENTS.md', 'USER.md', 'IDENTITY.md', 'MEMORY.md', 'HEARTBEAT.md'];
+  
+  ensureDirectoryExists(OUTPUT_DIR);
+  
+  const files = [];
+  for (const filename of ROOT_FILES) {
+    const filePath = path.join(CLAWD_ROOT, filename);
+    if (!fs.existsSync(filePath)) continue;
+    
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const stats = fs.statSync(filePath);
+      const outputPath = path.join(OUTPUT_DIR, filename);
+      fs.writeFileSync(outputPath, content);
+      
+      files.push({
+        name: filename,
+        path: `memory/${filename}`,
+        size: stats.size,
+        lastModified: stats.mtime.toISOString(),
+        tags: ['config', 'workspace'],
+        title: filename.replace('.md', ''),
+        type: 'md',
+      });
+      console.log(`  + ${filename} (config, workspace)`);
+    } catch (error) {
+      console.warn(`Warning: Could not process root file ${filename}:`, error.message);
+    }
+  }
+  return files;
+}
+
 // Run the bundling
 if (require.main === module) {
   processMemoryFiles();
+  
+  // Merge root configs into the index
+  const rootFiles = bundleRootConfigs();
+  const indexPath = path.join(OUTPUT_DIR, 'index.json');
+  const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+  index.files = [...rootFiles, ...index.files];
+  fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+  console.log(`Total: ${index.files.length} files (including ${rootFiles.length} workspace configs)`);
 }
 
 module.exports = { processMemoryFiles };

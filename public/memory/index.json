@@ -1,6 +1,90 @@
 {
   "files": [
     {
+      "name": "TOOLS.md",
+      "path": "memory/TOOLS.md",
+      "size": 5893,
+      "lastModified": "2026-02-04T20:39:07.008Z",
+      "tags": [
+        "config",
+        "workspace"
+      ],
+      "title": "TOOLS",
+      "type": "md"
+    },
+    {
+      "name": "SOUL.md",
+      "path": "memory/SOUL.md",
+      "size": 3593,
+      "lastModified": "2026-02-04T20:33:37.149Z",
+      "tags": [
+        "config",
+        "workspace"
+      ],
+      "title": "SOUL",
+      "type": "md"
+    },
+    {
+      "name": "AGENTS.md",
+      "path": "memory/AGENTS.md",
+      "size": 8379,
+      "lastModified": "2026-02-01T05:05:26.583Z",
+      "tags": [
+        "config",
+        "workspace"
+      ],
+      "title": "AGENTS",
+      "type": "md"
+    },
+    {
+      "name": "USER.md",
+      "path": "memory/USER.md",
+      "size": 1684,
+      "lastModified": "2026-02-01T19:10:07.142Z",
+      "tags": [
+        "config",
+        "workspace"
+      ],
+      "title": "USER",
+      "type": "md"
+    },
+    {
+      "name": "IDENTITY.md",
+      "path": "memory/IDENTITY.md",
+      "size": 256,
+      "lastModified": "2026-01-29T23:58:35.140Z",
+      "tags": [
+        "config",
+        "workspace"
+      ],
+      "title": "IDENTITY",
+      "type": "md"
+    },
+    {
+      "name": "MEMORY.md",
+      "path": "memory/MEMORY.md",
+      "size": 16522,
+      "lastModified": "2026-02-04T20:33:32.603Z",
+      "tags": [
+        "config",
+        "workspace"
+      ],
+      "title": "MEMORY",
+      "type": "md"
+    },
+    {
+      "name": "HEARTBEAT.md",
+      "path": "memory/HEARTBEAT.md",
+      "size": 2617,
+      "lastModified": "2026-02-04T19:07:31.500Z",
+      "tags": [
+        "config",
+        "workspace"
+      ],
+      "title": "HEARTBEAT",
+      "type": "md"
+    },
+    {
       "name": "voice-calling-architecture.md",
       "path": "memory/voice-calling-architecture.md",
       "size": 4493,
