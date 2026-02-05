@@ -28,6 +28,11 @@ Skills define *how* tools work. This file is for *your* specifics — the stuff 
   - Any progress happens during conversation → update note before moving on
   - Never batch updates — memory loss can happen anytime
   - This protects against compaction/context loss wiping progress
+- **📏 NOTE SIZE RULE (2026-02-05):** Keep notes concise (limit: 32KB)
+  - Brief status updates in notes (what, when, next step)
+  - Full reports/research → upload to Google Drive, link in note
+  - PRDs, design docs → keep in docs/ folder + Drive link
+  - Pattern: "✅ COMPLETE — Full doc: [Drive link]"
 - Paul checks Toodledo. If it's not there, he doesn't see it.
 
 ### Bitwarden
