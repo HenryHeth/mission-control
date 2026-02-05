@@ -1,11 +1,22 @@
 # MEMORY.md
 
-## 🚨 NEVER SEND AS PAUL (2026-02-04) — ABSOLUTE RULE
-- **NEVER send emails from paul@heth.ca without Paul's EXPLICIT word-for-word approval**
-- "Reach out to X" does NOT mean "send as Paul" — it means draft or send as Henry
-- Create drafts only on paul@heth.ca. ALWAYS.
-- "Explicit approval" = Paul saying "send it from my email" or "yes send as me"
-- Violated this on 2026-02-04: sent to Replit support@replit.com as Paul without approval
+## 📘 HENRY BLUEPRINT — Capture Insights (2026-02-05)
+When we have a "this is gold" moment — a new pattern, architectural decision, or clever solution — **immediately append it to `docs/HENRY_BLUEPRINT.md`**. Don't wait for a future sweep. Capture it while the context is fresh.
+
+Examples of what to capture:
+- New conversation modes (like standup vs reflective)
+- Prompting patterns that work well
+- Integration decisions and why
+- Lessons learned from failures
+- Trust/safety rails we add
+
+## 🚨 EMAIL ACCESS — READ-ONLY FOR PAUL (2026-02-04) — RESOLVED
+- **paul@heth.ca:** READ-ONLY (gmail.readonly + calendar.readonly). Cannot send, draft, or modify.
+- **henry@heth.ca:** Full access (gmail, calendar, drive, etc.)
+- **Enforced at 3 levels:** Google API scopes, gog-safe wrapper, rules in MEMORY/SOUL
+- **New OAuth client:** Created Feb 4, credentials at ~/clawd/config/credentials.json
+- **Zero code changes needed** — all scripts already structured correctly
+- Paul's calendar accessed via henry@heth.ca (shared calendar). Paul's email read via paul@heth.ca read-only token.
 
 ## VERIFICATION RULE (2026-02-04) — THE #1 TRUST ISSUE
 - **NEVER say "done" without running the actual output and checking it**
@@ -106,6 +117,14 @@
 ### Google OAuth
 - Credentials: `~/clawd/config/credentials.json`
 - Project: gen-lang-client-0556819850
+
+## Multi-Model Routing (LIVE 2026-02-04)
+- **Heartbeats:** google/gemini-2.5-flash (was Opus — saves ~$1,400/mo)
+- **Sub-agents:** anthropic/claude-sonnet-4-20250514 (10x cheaper than Opus)
+- **Main session:** anthropic/claude-opus-4-5 primary, fallbacks: openai/gpt-5.2 → google/gemini-3-pro-preview
+- **Config keys:** heartbeat.model, subagents.model, model.fallbacks
+- **TD task:** 443292386 (full pricing research + implementation notes)
+- **Costs dashboard** (TD 443085872) needed to monitor savings
 
 ## Active Projects
 
@@ -281,4 +300,17 @@
 ### Research Objective Rule
 When performing research for Paul, always include a concrete plan or recommendation as part of the result. Research is not complete until a practical next step or strategy is presented.
 
-When updating task notes in Toodledo, never overwrite the existing notes. Always append new notes above the old ones, so the history is preserved.
+### 📝 Note-Taking Rule (Reverse Chronological)
+**Newest information ALWAYS goes at the TOP.**
+- **Prepend** new updates above older notes.
+- Use a separator (`---`) or timestamp header.
+- Never force Paul to scroll to find the latest status.
+- Format:
+  ```
+  [YYYY-MM-DD HH:MM] Newest Update
+  Details...
+  
+  ---
+  
+  [Old Date] Old Update
+  ```

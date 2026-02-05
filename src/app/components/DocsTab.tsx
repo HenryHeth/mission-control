@@ -1,13 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 // --- Live API Configuration ---
-// The file-server.js serves files directly from disk.
-// Set this to your file server's public URL (e.g., via Cloudflare tunnel, ngrok, etc.)
-// Falls back to bundled /api/docs if unreachable.
 const LIVE_API_URL = process.env.NEXT_PUBLIC_LIVE_API_URL || 'http://localhost:3456';
 
 interface FileInfo {
@@ -28,7 +25,15 @@ interface FileContent {
   source?: string;
 }
 
+interface FolderStructure {
+  name: string;
+  path: string;
+  files: FileInfo[];
+  subfolders: FolderStructure[];
+}
+
 type DataSource = 'live' | 'bundled' | 'checking';
+type ViewMode = 'list' | 'tree';
 
 function getTagClass(tag: string): string {
   const t = tag.toLowerCase();
@@ -40,6 +45,7 @@ function getTagClass(tag: string): string {
   if (t === 'call' || t === 'transcript') return 'tag-badge--call';
   if (t === 'config' || t === 'workspace') return 'tag-badge--config';
   if (t === 'telegram') return 'tag-badge--telegram';
+  if (t === 'personal') return 'tag-badge--personal';
   return 'tag-badge--other';
 }
 
@@ -52,7 +58,7 @@ function timeAgo(dateString: string): string {
   const days = Math.floor(ms / 86400000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
-  if (hrs < 24) return `about ${hrs} hours ago`;
+  if (hrs < 24) return `${hrs}h ago`;
   if (days === 1) return '1 day ago';
   if (days < 30) return `${days} days ago`;
   return `${Math.floor(days / 30)} months ago`;
@@ -68,6 +74,116 @@ function fmtSize(b: number): string {
   return (b / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function buildFolderStructure(files: FileInfo[]): FolderStructure {
+  const root: FolderStructure = { name: 'root', path: '', files: [], subfolders: [] };
+  
+  for (const file of files) {
+    const parts = file.path.split('/');
+    let current = root;
+    
+    // Navigate/create folder structure
+    for (let i = 0; i < parts.length - 1; i++) {
+      const folderName = parts[i];
+      let subfolder = current.subfolders.find(f => f.name === folderName);
+      if (!subfolder) {
+        subfolder = { 
+          name: folderName, 
+          path: parts.slice(0, i + 1).join('/'),
+          files: [], 
+          subfolders: [] 
+        };
+        current.subfolders.push(subfolder);
+      }
+      current = subfolder;
+    }
+    
+    current.files.push(file);
+  }
+  
+  // Sort subfolders and files
+  const sortFolder = (folder: FolderStructure) => {
+    folder.subfolders.sort((a, b) => a.name.localeCompare(b.name));
+    folder.files.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    folder.subfolders.forEach(sortFolder);
+  };
+  
+  sortFolder(root);
+  return root;
+}
+
+function FolderView({ 
+  folder, 
+  depth = 0, 
+  selectedFile, 
+  onSelectFile,
+  expandedFolders,
+  onToggleFolder 
+}: { 
+  folder: FolderStructure; 
+  depth?: number;
+  selectedFile: string | null;
+  onSelectFile: (path: string) => void;
+  expandedFolders: Set<string>;
+  onToggleFolder: (path: string) => void;
+}) {
+  const isExpanded = expandedFolders.has(folder.path);
+  const hasContent = folder.files.length > 0 || folder.subfolders.length > 0;
+  
+  if (!hasContent && depth > 0) return null;
+  
+  return (
+    <div className="folder-group" style={{ marginLeft: depth > 0 ? 8 : 0 }}>
+      {depth > 0 && (
+        <div 
+          className={`folder-header ${isExpanded ? 'folder-header--expanded' : ''}`}
+          onClick={() => onToggleFolder(folder.path)}
+        >
+          <span className="folder-icon">{isExpanded ? '📂' : '📁'}</span>
+          <span className="folder-name">{folder.name}</span>
+          <span className="folder-count">{folder.files.length + folder.subfolders.reduce((acc, f) => acc + f.files.length, 0)}</span>
+        </div>
+      )}
+      
+      {(depth === 0 || isExpanded) && (
+        <>
+          {folder.files.map(file => (
+            <div
+              key={file.path}
+              onClick={() => onSelectFile(file.path)}
+              className={`file-item ${selectedFile === file.path ? 'file-item--selected' : ''}`}
+            >
+              <div className="file-item__dot" />
+              <div className="file-item__info">
+                <div className="file-item__name">{file.name}</div>
+                <div className="file-item__meta">
+                  {file.tags[0] && (
+                    <span className={`tag-badge ${getTagClass(file.tags[0])}`}>
+                      {file.tags[0]}
+                    </span>
+                  )}
+                  <span className="file-item__date">{timeAgo(file.lastModified)}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {folder.subfolders.map(subfolder => (
+            <FolderView
+              key={subfolder.path}
+              folder={subfolder}
+              depth={depth + 1}
+              selectedFile={selectedFile}
+              onSelectFile={onSelectFile}
+              expandedFolders={expandedFolders}
+              onToggleFolder={onToggleFolder}
+            />
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function DocsTab() {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -79,23 +195,33 @@ export default function DocsTab() {
   const [activeTypes, setActiveTypes] = useState<string[]>([]);
   const [dataSource, setDataSource] = useState<DataSource>('checking');
   const [liveApiAvailable, setLiveApiAvailable] = useState<boolean | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('tree');
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['memory', 'docs']));
 
-  const allTags = Array.from(new Set(files.flatMap(f => f.tags))).sort();
-  const allTypes = Array.from(new Set(files.map(f => {
-    const ext = f.name.split('.').pop()?.toLowerCase();
-    return ext ? '.' + ext : '';
-  }))).filter(Boolean).sort();
+  const allTags = useMemo(() => 
+    Array.from(new Set(files.flatMap(f => f.tags))).sort(),
+    [files]
+  );
+  
+  const allTypes = useMemo(() => 
+    Array.from(new Set(files.map(f => {
+      const ext = f.name.split('.').pop()?.toLowerCase();
+      return ext ? '.' + ext : '';
+    }))).filter(Boolean).sort(),
+    [files]
+  );
 
-  const filtered = files.filter(f => {
+  const filtered = useMemo(() => files.filter(f => {
     const q = searchTerm.toLowerCase();
     const matchQ = !q || f.title.toLowerCase().includes(q) || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q);
     const matchTag = activeTags.length === 0 || activeTags.some(t => f.tags.includes(t));
     const ext = '.' + (f.name.split('.').pop()?.toLowerCase() || '');
     const matchType = activeTypes.length === 0 || activeTypes.includes(ext);
     return matchQ && matchTag && matchType;
-  });
+  }), [files, searchTerm, activeTags, activeTypes]);
 
-  // Try live API first, fall back to bundled
+  const folderStructure = useMemo(() => buildFolderStructure(filtered), [filtered]);
+
   const fetchFiles = useCallback(async () => {
     // Try live API
     try {
@@ -158,7 +284,6 @@ export default function DocsTab() {
     }
 
     // Fallback: bundled API
-    // The bundled API uses filename (just the name), not full path
     const name = filePath.includes('/') ? filePath.split('/').pop()! : filePath;
     try {
       const res = await fetch(`/api/docs?file=${encodeURIComponent(name)}`);
@@ -190,7 +315,18 @@ export default function DocsTab() {
   const toggleType = (t: string) =>
     setActiveTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
 
-  // Manual refresh
+  const toggleFolder = (path: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
   const handleRefresh = () => {
     setLoading(true);
     fetchFiles();
@@ -229,7 +365,6 @@ export default function DocsTab() {
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={{ width: 13, height: 13 }}
           >
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
@@ -242,10 +377,28 @@ export default function DocsTab() {
           />
         </div>
 
+        {/* View mode toggle */}
+        <div className="docs-sidebar__view-toggle">
+          <button 
+            className={`view-btn ${viewMode === 'list' ? 'view-btn--active' : ''}`}
+            onClick={() => setViewMode('list')}
+            title="List view"
+          >
+            ☰
+          </button>
+          <button 
+            className={`view-btn ${viewMode === 'tree' ? 'view-btn--active' : ''}`}
+            onClick={() => setViewMode('tree')}
+            title="Tree view"
+          >
+            🌲
+          </button>
+        </div>
+
         {/* Tag filters */}
         {allTags.length > 0 && (
           <div className="docs-sidebar__filters">
-            {allTags.map(tag => (
+            {allTags.slice(0, 10).map(tag => (
               <button
                 key={tag}
                 onClick={() => toggleTag(tag)}
@@ -257,46 +410,41 @@ export default function DocsTab() {
           </div>
         )}
 
-        {/* File type filters */}
-        {allTypes.length > 0 && (
-          <div className="docs-sidebar__filters">
-            {allTypes.map(type => (
-              <button
-                key={type}
-                onClick={() => toggleType(type)}
-                className={`filter-chip filter-chip--type ${activeTypes.includes(type) ? 'filter-chip--active' : ''}`}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* File list */}
         <div className="docs-sidebar__list">
-          {filtered.map(file => (
-            <div
-              key={file.path}
-              onClick={() => selectFile(file.path)}
-              className={`file-item ${selectedFile === file.path ? 'file-item--selected' : ''}`}
-            >
-              <div className="file-item__dot" />
-              <div className="file-item__info">
-                <div className="file-item__name">{file.name}</div>
-                {file.path.includes('/') && (
-                  <div className="file-item__path">{file.path}</div>
-                )}
-                <div className="file-item__meta">
-                  {file.tags[0] && (
-                    <span className={`tag-badge ${getTagClass(file.tags[0])}`}>
-                      {file.tags[0]}
-                    </span>
+          {viewMode === 'tree' ? (
+            <FolderView
+              folder={folderStructure}
+              selectedFile={selectedFile}
+              onSelectFile={selectFile}
+              expandedFolders={expandedFolders}
+              onToggleFolder={toggleFolder}
+            />
+          ) : (
+            filtered.map(file => (
+              <div
+                key={file.path}
+                onClick={() => selectFile(file.path)}
+                className={`file-item ${selectedFile === file.path ? 'file-item--selected' : ''}`}
+              >
+                <div className="file-item__dot" />
+                <div className="file-item__info">
+                  <div className="file-item__name">{file.name}</div>
+                  {file.path.includes('/') && (
+                    <div className="file-item__path">{file.path}</div>
                   )}
-                  <span className="file-item__date">{timeAgo(file.lastModified)}</span>
+                  <div className="file-item__meta">
+                    {file.tags[0] && (
+                      <span className={`tag-badge ${getTagClass(file.tags[0])}`}>
+                        {file.tags[0]}
+                      </span>
+                    )}
+                    <span className="file-item__date">{timeAgo(file.lastModified)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
           {filtered.length === 0 && (
             <div style={{ padding: 16, textAlign: 'center', color: '#555', fontSize: 13 }}>
               {searchTerm || activeTags.length || activeTypes.length ? 'No files match' : 'No documents'}
@@ -347,6 +495,11 @@ export default function DocsTab() {
               {dataSource === 'bundled' && (
                 <div style={{ fontSize: 11, color: '#666', marginTop: 8 }}>
                   ⚠️ Showing bundled files (live server unavailable)
+                </div>
+              )}
+              {dataSource === 'live' && (
+                <div style={{ fontSize: 11, color: '#4a4', marginTop: 8 }}>
+                  ✓ Connected to live file server
                 </div>
               )}
             </div>

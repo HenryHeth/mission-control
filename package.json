@@ -7,7 +7,9 @@
     "prebuild": "node scripts/bundle-memory-files.js",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "file-server": "node scripts/file-server.js",
+    "dev:live": "concurrently \"npm run file-server\" \"npm run dev\""
   },
   "dependencies": {
     "gray-matter": "^4.0.3",

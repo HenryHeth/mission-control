@@ -9,14 +9,25 @@ Skills define *how* tools work. This file is for *your* specifics — the stuff 
 - **Credentials:** `toodledo_credentials.json`
 - **Working Scripts:** `scripts/toodledo_update_fix.js`, `scripts/toodledo_add_task.js`
 - **Defaults when creating:** Folder: pWorkflow (ID: 9975528), Priority: Med (1) — set these unless a specific topic folder is more appropriate (pHome, pPhysical, pFinancial, etc.)
-- **Paul's task views:**
-  - Paul's tasks: https://tasks.toodledo.com/saved/240253#
-  - Henry's tasks: https://tasks.toodledo.com/saved/240228#
-  - Henry deliverables (briefing): https://tasks.toodledo.com/saved/240262
-  - Henry incoming (new4henry): https://tasks.toodledo.com/saved/240263#
+- **Task views (updated 2026-02-04):**
+  - All of Henry's Tasks: https://tasks.toodledo.com/saved/240291#
+  - Henry's Tasks for Today: https://tasks.toodledo.com/saved/240292#
+  - Henry's Overnight Tasks: https://tasks.toodledo.com/saved/240293# (tag-based)
+  - Henry Done In Last 7 Days: https://tasks.toodledo.com/saved/240295#
+  - Paul's Tasks for Today: https://tasks.toodledo.com/saved/240253#
+- **Context IDs (owner field):**
+  - Henry: 1462384
+  - Henry90: 1462406
+  - Paul: 1462385
 - **"Henry:90" prefix:** Henry can do ~90% independently, needs Paul for the last ~10% (credentials, decisions, physical actions)
 - **Progress:** ALWAYS log in BOTH task notes AND memory files
 - **Task notes must include:** what was completed, links to outputs (Drive, GitHub), next steps
+- **📝 NOTES GO AT THE TOP:** New updates PREPEND above old notes (reverse chronological). Paul should never scroll to see latest status. Format: `--- Update YYYY-MM-DD ---\n[new content]\n\n---\n\n[old content]`
+- **⚡ REAL-TIME UPDATES (2026-02-05):** Update task notes IMMEDIATELY when:
+  - Sub-agent completes and reports back → update note RIGHT AWAY
+  - Any progress happens during conversation → update note before moving on
+  - Never batch updates — memory loss can happen anytime
+  - This protects against compaction/context loss wiping progress
 - Paul checks Toodledo. If it's not there, he doesn't see it.
 
 ### Bitwarden
@@ -91,6 +102,15 @@ browser.disconnect(); // NOT browser.close()
 - **Actions section at the TOP** — not buried at the bottom
 - Use `- [ ]` checkboxes for each action item
 - Include owner, priority, and timeline
+
+### Model Routing (live 2026-02-04, updated 3:36 PM)
+- **Main session:** Opus 4.5 → GPT 5.2 → Gemini 3 Pro (fallback chain)
+- **Sub-agents:** Opus 4.5
+- **Heartbeats:** Gemini 2.5 Flash Lite (free tier, minimal burn)
+- **Thinking:** XHIGH (Opus 4.5 designed around extended thinking — OFF wastes its main advantage)
+- **Tier:** Anthropic 20X (goal: step down to 5X next week once efficiency systems solid)
+- **Config:** `agents.defaults` in `~/.clawdbot/clawdbot.json`
+- **Notes:** TOOLS.md (this section) is the human-readable record
 
 ## What Goes Here
 

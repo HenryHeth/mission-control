@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import DocsTab from './components/DocsTab';
+import TasksTab from './components/TasksTab';
 
 type Tab = 'tasks' | 'projects' | 'memory' | 'captures' | 'docs' | 'people';
 
@@ -48,7 +49,8 @@ export default function Home() {
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
         {activeTab === 'docs' && <DocsTab />}
-        {activeTab !== 'docs' && (
+        {activeTab === 'tasks' && <TasksTab />}
+        {activeTab !== 'docs' && activeTab !== 'tasks' && (
           <div className="docs-layout">
             <div className="content-empty">
               <div style={{ textAlign: 'center' }}>
