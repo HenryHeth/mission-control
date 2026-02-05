@@ -29,6 +29,8 @@ Skills define *how* tools work. This file is for *your* specifics — the stuff 
   - Never batch updates — memory loss can happen anytime
   - This protects against compaction/context loss wiping progress
 - **📏 NOTE SIZE RULE (2026-02-05):** Keep notes concise (limit: 32KB)
+  - **200 word limit** — anything longer becomes a formatted report on Drive
+  - **ALWAYS use henry@heth.ca Drive** — not hethfam7, not paul@heth.ca
   - Brief status updates in notes (what, when, next step)
   - Full reports/research → upload to Google Drive, link in note
   - PRDs, design docs → keep in docs/ folder + Drive link

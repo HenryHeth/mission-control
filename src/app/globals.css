@@ -1253,3 +1253,251 @@ body {
   overflow-y: auto;
   padding: 20px;
 }
+
+/* ═══════════════════════════════════════════════
+   Captures Tab Styles
+   ═══════════════════════════════════════════════ */
+
+.captures-layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.captures-sidebar {
+  width: 300px;
+  background: var(--bg-subtle);
+  border-right: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.captures-sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.captures-sidebar__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.captures-stats {
+  display: flex;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.captures-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.captures-stat__value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.captures-stat__label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+
+.captures-sidebar__search {
+  position: relative;
+  padding: 10px 14px;
+}
+
+.captures-sidebar__search-icon {
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.captures-sidebar__input {
+  width: 100%;
+  height: 32px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 0 10px 0 32px;
+  font-size: 0.7rem;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.12s;
+  font-family: inherit;
+}
+
+.captures-sidebar__input:focus {
+  border-color: var(--text-dim);
+}
+
+.captures-filters {
+  display: flex;
+  gap: 4px;
+  padding: 0 14px 10px;
+}
+
+.captures-filter {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 0.65rem;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.captures-filter:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+
+.captures-filter--active {
+  background: var(--sky);
+  color: #fff;
+  border-color: var(--sky);
+}
+
+.captures-sidebar__list {
+  flex: 1;
+  overflow-y: auto;
+  border-top: 1px solid var(--card-border);
+}
+
+.captures-group {
+  border-bottom: 1px solid var(--card-border);
+}
+
+.captures-group__header {
+  padding: 8px 14px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.capture-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-left: 2px solid transparent;
+}
+
+.capture-item:hover {
+  background: var(--card);
+}
+
+.capture-item--selected {
+  background: var(--card-hover);
+  border-left-color: var(--sky);
+}
+
+.capture-item__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.capture-item__name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.capture-item--selected .capture-item__name {
+  color: #fff;
+  font-weight: 600;
+}
+
+.capture-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.captures-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.captures-content__header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--card-border);
+  flex-shrink: 0;
+}
+
+.captures-content__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.captures-content__meta {
+  margin-top: 4px;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.captures-content__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.transcript-content {
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+}
+
+.transcript-content pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--text);
+  background: transparent;
+  padding: 0;
+  border: none;
+}

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import DocsTab from './components/DocsTab';
 import TasksTab from './components/TasksTab';
 import MemoryTab from './components/MemoryTab';
+import CapturesTab from './components/CapturesTab';
 
 type Tab = 'tasks' | 'projects' | 'memory' | 'captures' | 'docs' | 'people';
 
@@ -51,8 +52,9 @@ export default function Home() {
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
         {activeTab === 'tasks' && <TasksTab />}
         {activeTab === 'memory' && <MemoryTab />}
+        {activeTab === 'captures' && <CapturesTab />}
         {activeTab === 'docs' && <DocsTab />}
-        {!['tasks', 'memory', 'docs'].includes(activeTab) && (
+        {!['tasks', 'memory', 'captures', 'docs'].includes(activeTab) && (
           <div className="docs-layout">
             <div className="content-empty">
               <div style={{ textAlign: 'center' }}>
