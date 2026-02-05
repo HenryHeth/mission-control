@@ -1,414 +1,514 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  ComposedChart, BarChart, AreaChart,
+  Bar, Area, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts';
+import {
+  Zap, CheckCircle2, TrendingUp, Clock, ListChecks,
+  BarChart3, FolderOpen, RefreshCw, AlertCircle
+} from 'lucide-react';
+import { format, subDays, formatDistanceToNow } from 'date-fns';
 
-// Task API - connects to file server or uses sample data
+/* ═══════════════════════════════════════════════════════
+   Mission Control — Tasks Tab
+   Velocity, Recent Closes, New vs Retired, Backlog Trend
+   ═══════════════════════════════════════════════════════ */
+
 const LIVE_API_URL = process.env.NEXT_PUBLIC_LIVE_API_URL || 'http://localhost:3456';
 
 interface Task {
-  id: string;
+  id: number;
   title: string;
-  status: 'open' | 'in-progress' | 'done';
-  priority: 'high' | 'med' | 'low';
   folder: string;
-  dueDate?: string;
-  context?: string;
-  tags: string[];
-  note?: string;
-  modified: string;
+  completed: number; // Unix timestamp (0 if not completed)
+  added: number; // Unix timestamp
+  priority: number;
+  duedate?: number;
 }
 
-type FilterStatus = 'all' | 'open' | 'in-progress' | 'done';
-type SortBy = 'priority' | 'due' | 'modified' | 'title';
-
-function getPriorityClass(priority: string): string {
-  if (priority === 'high') return 'priority--high';
-  if (priority === 'med') return 'priority--med';
-  return 'priority--low';
+interface TaskData {
+  completed: Task[];
+  open: Task[];
+  totalOpen: number;
+  totalCompleted: number;
+  generatedAt: string;
 }
 
-function getPriorityIcon(priority: string): string {
-  if (priority === 'high') return '🔴';
-  if (priority === 'med') return '🟡';
-  return '🟢';
-}
-
-function timeAgo(dateString: string): string {
-  const d = new Date(dateString);
-  const now = new Date();
-  const ms = now.getTime() - d.getTime();
-  const mins = Math.floor(ms / 60000);
-  const hrs = Math.floor(ms / 3600000);
-  const days = Math.floor(ms / 86400000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  if (hrs < 24) return `${hrs}h ago`;
-  if (days === 1) return '1 day ago';
-  if (days < 30) return `${days} days ago`;
-  return `${Math.floor(days / 30)} months ago`;
-}
-
-function formatDueDate(dateString?: string): string {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  const now = new Date();
-  const diffDays = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+// Sample data for demo (will be replaced by API)
+function generateSampleData(): TaskData {
+  const now = Math.floor(Date.now() / 1000);
+  const completed: Task[] = [];
+  const open: Task[] = [];
   
-  if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`;
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Tomorrow';
-  if (diffDays < 7) return `${diffDays} days`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Generate 60 days of completed tasks
+  for (let i = 0; i < 150; i++) {
+    const daysAgo = Math.floor(Math.random() * 60);
+    const completedTs = now - daysAgo * 86400 - Math.floor(Math.random() * 43200);
+    const addedTs = completedTs - Math.floor(Math.random() * 7 * 86400);
+    
+    completed.push({
+      id: i + 1,
+      title: SAMPLE_TASK_TITLES[i % SAMPLE_TASK_TITLES.length],
+      folder: SAMPLE_FOLDERS[Math.floor(Math.random() * SAMPLE_FOLDERS.length)],
+      completed: completedTs,
+      added: addedTs,
+      priority: Math.floor(Math.random() * 3) + 1,
+    });
+  }
+  
+  // Generate open tasks
+  for (let i = 0; i < 45; i++) {
+    const addedDaysAgo = Math.floor(Math.random() * 30);
+    const addedTs = now - addedDaysAgo * 86400;
+    
+    open.push({
+      id: 1000 + i,
+      title: SAMPLE_TASK_TITLES[(i + 50) % SAMPLE_TASK_TITLES.length],
+      folder: SAMPLE_FOLDERS[Math.floor(Math.random() * SAMPLE_FOLDERS.length)],
+      completed: 0,
+      added: addedTs,
+      priority: Math.floor(Math.random() * 3) + 1,
+      duedate: Math.random() > 0.5 ? now + Math.floor(Math.random() * 7 * 86400) : undefined,
+    });
+  }
+  
+  return {
+    completed: completed.sort((a, b) => b.completed - a.completed),
+    open,
+    totalOpen: open.length,
+    totalCompleted: completed.length,
+    generatedAt: new Date().toISOString(),
+  };
 }
 
-// Sample tasks for demo (will be replaced by API)
-const SAMPLE_TASKS: Task[] = [
-  {
-    id: '1',
-    title: 'Build Mission Control v1',
-    status: 'in-progress',
-    priority: 'high',
-    folder: 'pWorkflow',
-    context: 'Henry',
-    tags: ['dev', 'dashboard'],
-    note: 'Continue building Next.js + Tailwind dashboard',
-    modified: new Date().toISOString(),
-    dueDate: new Date(Date.now() + 86400000).toISOString(),
-  },
-  {
-    id: '2',
-    title: 'Review sprint planning docs',
-    status: 'open',
-    priority: 'med',
-    folder: 'pWorkflow',
-    context: 'Henry',
-    tags: ['planning'],
-    modified: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    id: '3',
-    title: 'Research VVO frameworks',
-    status: 'done',
-    priority: 'med',
-    folder: 'pWorkflow',
-    context: 'Henry',
-    tags: ['research'],
-    note: 'Completed ikigai integration analysis',
-    modified: new Date(Date.now() - 86400000).toISOString(),
-  },
-  {
-    id: '4',
-    title: 'Morning briefing automation',
-    status: 'open',
-    priority: 'high',
-    folder: 'pWorkflow',
-    context: 'Henry',
-    tags: ['automation'],
-    modified: new Date(Date.now() - 7200000).toISOString(),
-    dueDate: new Date(Date.now() + 172800000).toISOString(),
-  },
-  {
-    id: '5',
-    title: 'Update MEMORY.md with lessons learned',
-    status: 'open',
-    priority: 'low',
-    folder: 'pWorkflow',
-    context: 'Henry',
-    tags: ['memory'],
-    modified: new Date(Date.now() - 10800000).toISOString(),
-  },
+const SAMPLE_TASK_TITLES = [
+  'Build Mission Control v1',
+  'Review sprint planning docs',
+  'Research VVO frameworks',
+  'Morning briefing automation',
+  'Update MEMORY.md',
+  'Toodledo API integration',
+  'Deploy to Vercel',
+  'Fix authentication flow',
+  'Create task velocity chart',
+  'Implement dark theme',
+  'Add bar charts to dashboard',
+  'Review Anthropic usage',
+  'Schedule weekly standup',
+  'Update TOOLS.md',
+  'Research Home Assistant',
+  'Configure RescueTime API',
+  'Build captures viewer',
+  'Test voice calling',
+  'Review calendar sync',
+  'Optimize API costs',
+  'Write documentation',
+  'Fix mobile layout',
+  'Add search functionality',
+  'Create memory browser',
+  'Design system status page',
 ];
 
+const SAMPLE_FOLDERS = ['pWorkflow', 'pHome', 'pFinancial', 'pPhysical', 'Inbox'];
+
+function DarkTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="chart-tooltip">
+      <div className="chart-tooltip__label">{label}</div>
+      {payload.map((entry, i) => (
+        <div key={i} className="chart-tooltip__row">
+          <div className="chart-tooltip__dot" style={{ background: entry.color }} />
+          <span className="chart-tooltip__name">{entry.name}:</span>
+          <span className="chart-tooltip__value">{entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatPill({ icon, value, label, color, bgColor }: { 
+  icon: React.ReactNode; 
+  value: number | string; 
+  label: string; 
+  color: string; 
+  bgColor: string; 
+}) {
+  return (
+    <div className="stat-pill">
+      <div className="stat-pill__icon" style={{ background: bgColor, color }}>
+        {icon}
+      </div>
+      <div>
+        <div className="stat-pill__value" style={{ color }}>{value}</div>
+        <div className="stat-pill__label">{label}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function TasksTab() {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [data, setData] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
-  const [sortBy, setSortBy] = useState<SortBy>('priority');
-  const [searchTerm, setSearchTerm] = useState('');
   const [dataSource, setDataSource] = useState<'live' | 'sample'>('sample');
 
-  const fetchTasks = useCallback(async () => {
+  useEffect(() => {
     // Try live API first
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`${LIVE_API_URL}/api/tasks`, { signal: controller.signal });
-      clearTimeout(timeout);
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data.tasks) {
-          setTasks(data.tasks);
-          setDataSource('live');
-          setLoading(false);
-          return;
+    const fetchData = async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(`${LIVE_API_URL}/api/tasks`, { signal: controller.signal });
+        clearTimeout(timeout);
+        
+        if (res.ok) {
+          const d = await res.json();
+          if (d.completed && d.open) {
+            setData(d);
+            setDataSource('live');
+            setLoading(false);
+            return;
+          }
         }
+      } catch {
+        // Fall through to sample data
       }
-    } catch {
-      // Live API unreachable — use sample data
-    }
-
-    // Fallback to sample data
-    setTasks(SAMPLE_TASKS);
-    setDataSource('sample');
-    setLoading(false);
+      
+      // Use sample data
+      setData(generateSampleData());
+      setDataSource('sample');
+      setLoading(false);
+    };
+    
+    fetchData();
   }, []);
 
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+  /* ── Task Velocity: daily completions + 7-day moving average ── */
+  const velocityData = useMemo(() => {
+    if (!data) return [];
+    const now = new Date();
+    const days: { date: string; label: string; count: number }[] = [];
 
-  const filteredTasks = useMemo(() => {
-    let result = tasks;
-    
-    // Filter by status
-    if (filterStatus !== 'all') {
-      result = result.filter(t => t.status === filterStatus);
+    for (let i = 29; i >= 0; i--) {
+      const day = subDays(now, i);
+      const dayStr = format(day, 'yyyy-MM-dd');
+      const count = data.completed.filter(t => {
+        const completedDate = new Date(t.completed * 1000);
+        return format(completedDate, 'yyyy-MM-dd') === dayStr;
+      }).length;
+      days.push({ date: dayStr, label: format(day, 'M/d'), count });
     }
-    
-    // Filter by search
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      result = result.filter(t => 
-        t.title.toLowerCase().includes(q) ||
-        t.folder.toLowerCase().includes(q) ||
-        t.tags.some(tag => tag.toLowerCase().includes(q))
-      );
-    }
-    
-    // Sort
-    result = [...result].sort((a, b) => {
-      if (sortBy === 'priority') {
-        const order = { high: 0, med: 1, low: 2 };
-        return order[a.priority] - order[b.priority];
-      }
-      if (sortBy === 'due') {
-        if (!a.dueDate) return 1;
-        if (!b.dueDate) return -1;
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      }
-      if (sortBy === 'modified') {
-        return new Date(b.modified).getTime() - new Date(a.modified).getTime();
-      }
-      return a.title.localeCompare(b.title);
+
+    // 7-day moving average
+    return days.map((d, i) => {
+      const start = Math.max(0, i - 6);
+      const windowSlice = days.slice(start, i + 1);
+      const avg = windowSlice.reduce((sum, p) => sum + p.count, 0) / windowSlice.length;
+      return { ...d, avg: Math.round(avg * 10) / 10 };
     });
-    
-    return result;
-  }, [tasks, filterStatus, searchTerm, sortBy]);
+  }, [data]);
 
-  const stats = useMemo(() => ({
-    total: tasks.length,
-    open: tasks.filter(t => t.status === 'open').length,
-    inProgress: tasks.filter(t => t.status === 'in-progress').length,
-    done: tasks.filter(t => t.status === 'done').length,
-  }), [tasks]);
+  /* ── Recent Closes: last 20 completed tasks ── */
+  const recentCloses = useMemo(() => {
+    if (!data) return [];
+    return [...data.completed]
+      .sort((a, b) => b.completed - a.completed)
+      .slice(0, 15);
+  }, [data]);
+
+  /* ── New vs Retired: tasks created vs completed per week ── */
+  const newVsRetired = useMemo(() => {
+    if (!data) return [];
+    const now = new Date();
+    const allTasks = [...data.completed, ...data.open];
+    const weeks = [];
+
+    for (let i = 7; i >= 0; i--) {
+      const weekEnd = subDays(now, i * 7);
+      const weekStart = subDays(weekEnd, 7);
+      const startTs = Math.floor(weekStart.getTime() / 1000);
+      const endTs = Math.floor(weekEnd.getTime() / 1000);
+
+      const created = allTasks.filter(t => t.added >= startTs && t.added < endTs).length;
+      const retired = data.completed.filter(t => t.completed >= startTs && t.completed < endTs).length;
+
+      weeks.push({
+        week: format(weekStart, 'MMM d'),
+        created,
+        retired
+      });
+    }
+    return weeks;
+  }, [data]);
+
+  /* ── Backlog Trend: estimated open count over last 60 days ── */
+  const backlogData = useMemo(() => {
+    if (!data) return [];
+    const now = new Date();
+    const allTasks = [...data.completed, ...data.open];
+    const sixtyDaysAgoTs = Math.floor(Date.now() / 1000) - 60 * 86400;
+
+    // Estimate starting open count (60 days ago)
+    const createdInPeriod = allTasks.filter(t => t.added >= sixtyDaysAgoTs).length;
+    const completedInPeriod = data.completed.length;
+    let runningOpen = data.totalOpen - createdInPeriod + completedInPeriod;
+
+    const points = [];
+    for (let i = 59; i >= 0; i--) {
+      const day = subDays(now, i);
+      const dayStr = format(day, 'yyyy-MM-dd');
+      const dayStartTs = Math.floor(new Date(dayStr + 'T00:00:00').getTime() / 1000);
+      const dayEndTs = dayStartTs + 86400;
+
+      const createdToday = allTasks.filter(t => t.added >= dayStartTs && t.added < dayEndTs).length;
+      const completedToday = data.completed.filter(t => t.completed >= dayStartTs && t.completed < dayEndTs).length;
+
+      runningOpen += createdToday - completedToday;
+      points.push({
+        date: dayStr,
+        label: format(day, 'M/d'),
+        count: Math.max(0, runningOpen)
+      });
+    }
+    return points;
+  }, [data]);
+
+  /* ── Summary stats ── */
+  const stats = useMemo(() => {
+    if (!data) return { open: 0, closedWeek: 0, avgPerDay: '0', overdue: 0 };
+    const nowTs = Math.floor(Date.now() / 1000);
+    const weekAgoTs = nowTs - 7 * 86400;
+    const closedThisWeek = data.completed.filter(t => t.completed >= weekAgoTs).length;
+    const daysInData = 60;
+    const avgPerDay = (data.totalCompleted / daysInData).toFixed(1);
+    const overdue = data.open.filter(t => t.duedate && t.duedate < nowTs).length;
+
+    return {
+      open: data.totalOpen,
+      closedWeek: closedThisWeek,
+      avgPerDay,
+      overdue,
+    };
+  }, [data]);
 
   if (loading) {
     return (
-      <div className="tasks-layout">
-        <div className="content-empty"><span className="loading-text">Loading tasks...</span></div>
+      <div className="tasks-dashboard">
+        <div className="loading-screen">
+          <Zap size={48} className="pulse" />
+          <p>Loading task data…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="tasks-dashboard">
+        <div className="loading-screen">
+          <p style={{ color: 'var(--red)' }}>Failed to load data</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="tasks-layout">
-      {/* Sidebar */}
-      <div className="tasks-sidebar">
-        {/* Stats */}
-        <div className="tasks-stats">
-          <div className="stat-card">
-            <div className="stat-value">{stats.total}</div>
-            <div className="stat-label">Total</div>
-          </div>
-          <div className="stat-card stat-card--open">
-            <div className="stat-value">{stats.open}</div>
-            <div className="stat-label">Open</div>
-          </div>
-          <div className="stat-card stat-card--progress">
-            <div className="stat-value">{stats.inProgress}</div>
-            <div className="stat-label">In Progress</div>
-          </div>
-          <div className="stat-card stat-card--done">
-            <div className="stat-value">{stats.done}</div>
-            <div className="stat-label">Done</div>
-          </div>
+    <div className="tasks-dashboard">
+      {/* Header */}
+      <div className="tasks-header">
+        <div className="tasks-header__left">
+          <CheckCircle2 size={24} style={{ color: 'var(--emerald)' }} />
+          <h1>Task Metrics</h1>
         </div>
-
-        {/* Search */}
-        <div className="tasks-sidebar__search">
-          <input
-            className="tasks-sidebar__input"
-            placeholder="Search tasks..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-          />
-        </div>
-
-        {/* Filters */}
-        <div className="tasks-filters">
-          <div className="filter-group">
-            <div className="filter-label">Status</div>
-            <div className="filter-buttons">
-              {(['all', 'open', 'in-progress', 'done'] as FilterStatus[]).map(status => (
-                <button
-                  key={status}
-                  className={`filter-btn ${filterStatus === status ? 'filter-btn--active' : ''}`}
-                  onClick={() => setFilterStatus(status)}
-                >
-                  {status === 'in-progress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          <div className="filter-group">
-            <div className="filter-label">Sort by</div>
-            <div className="filter-buttons">
-              {(['priority', 'due', 'modified', 'title'] as SortBy[]).map(sort => (
-                <button
-                  key={sort}
-                  className={`filter-btn ${sortBy === sort ? 'filter-btn--active' : ''}`}
-                  onClick={() => setSortBy(sort)}
-                >
-                  {sort.charAt(0).toUpperCase() + sort.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Source indicator */}
-        <div className="tasks-source">
+        <div className="tasks-header__right">
           <span className={`source-badge source-badge--${dataSource === 'live' ? 'live' : 'bundled'}`}>
             {dataSource === 'live' ? '🟢 Live' : '🟡 Sample Data'}
+          </span>
+          <span className="tasks-header__updated">
+            <RefreshCw size={14} />
+            {format(new Date(data.generatedAt), 'MMM d, h:mm a')}
           </span>
         </div>
       </div>
 
-      {/* Task List */}
-      <div className="tasks-list-area">
-        <div className="tasks-list">
-          {filteredTasks.map(task => (
-            <div
-              key={task.id}
-              className={`task-card ${selectedTask?.id === task.id ? 'task-card--selected' : ''} task-card--${task.status}`}
-              onClick={() => setSelectedTask(task)}
-            >
-              <div className="task-card__header">
-                <span className="task-card__priority">{getPriorityIcon(task.priority)}</span>
-                <span className="task-card__title">{task.title}</span>
-                {task.dueDate && (
-                  <span className={`task-card__due ${new Date(task.dueDate) < new Date() ? 'task-card__due--overdue' : ''}`}>
-                    {formatDueDate(task.dueDate)}
-                  </span>
-                )}
-              </div>
-              <div className="task-card__meta">
-                <span className={`task-status task-status--${task.status}`}>
-                  {task.status === 'in-progress' ? '⏳ In Progress' : task.status === 'done' ? '✓ Done' : '○ Open'}
-                </span>
-                <span className="task-folder">{task.folder}</span>
-                {task.context && <span className="task-context">@{task.context}</span>}
-              </div>
-              {task.tags.length > 0 && (
-                <div className="task-card__tags">
-                  {task.tags.map(tag => (
-                    <span key={tag} className="task-tag">{tag}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-          
-          {filteredTasks.length === 0 && (
-            <div className="content-empty">
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 8 }}>✅</div>
-                <div>{searchTerm || filterStatus !== 'all' ? 'No tasks match' : 'No tasks'}</div>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Stats Bar */}
+      <div className="stats-bar">
+        <StatPill
+          icon={<FolderOpen size={18} />}
+          value={stats.open}
+          label="Open Tasks"
+          color="var(--amber)"
+          bgColor="var(--amber-dim)"
+        />
+        <StatPill
+          icon={<CheckCircle2 size={18} />}
+          value={stats.closedWeek}
+          label="Closed (7d)"
+          color="var(--emerald)"
+          bgColor="var(--emerald-dim)"
+        />
+        <StatPill
+          icon={<TrendingUp size={18} />}
+          value={stats.avgPerDay}
+          label="Per Day (avg)"
+          color="var(--sky)"
+          bgColor="var(--sky-dim)"
+        />
+        {stats.overdue > 0 && (
+          <StatPill
+            icon={<AlertCircle size={18} />}
+            value={stats.overdue}
+            label="Overdue"
+            color="var(--red)"
+            bgColor="var(--red-dim)"
+          />
+        )}
       </div>
 
-      {/* Task Detail */}
-      <div className="task-detail">
-        {selectedTask ? (
-          <>
-            <div className="task-detail__header">
-              <span className="task-detail__priority">{getPriorityIcon(selectedTask.priority)}</span>
-              <h2 className="task-detail__title">{selectedTask.title}</h2>
-            </div>
-            
-            <div className="task-detail__meta">
-              <div className="meta-row">
-                <span className="meta-label">Status</span>
-                <span className={`task-status task-status--${selectedTask.status}`}>
-                  {selectedTask.status === 'in-progress' ? 'In Progress' : selectedTask.status.charAt(0).toUpperCase() + selectedTask.status.slice(1)}
-                </span>
-              </div>
-              <div className="meta-row">
-                <span className="meta-label">Priority</span>
-                <span className={getPriorityClass(selectedTask.priority)}>
-                  {selectedTask.priority.toUpperCase()}
-                </span>
-              </div>
-              <div className="meta-row">
-                <span className="meta-label">Folder</span>
-                <span>{selectedTask.folder}</span>
-              </div>
-              {selectedTask.context && (
-                <div className="meta-row">
-                  <span className="meta-label">Context</span>
-                  <span>@{selectedTask.context}</span>
-                </div>
-              )}
-              {selectedTask.dueDate && (
-                <div className="meta-row">
-                  <span className="meta-label">Due</span>
-                  <span className={new Date(selectedTask.dueDate) < new Date() ? 'text-overdue' : ''}>
-                    {new Date(selectedTask.dueDate).toLocaleDateString('en-US', { 
-                      weekday: 'short', 
-                      month: 'short', 
-                      day: 'numeric' 
-                    })}
+      {/* Bento Grid */}
+      <div className="bento-grid">
+        {/* Task Velocity */}
+        <div className="bento-card bento-card--velocity">
+          <div className="bento-card__header">
+            <TrendingUp size={20} style={{ color: 'var(--emerald)' }} />
+            <h2>Task Velocity</h2>
+            <span className="bento-card__subtitle">Last 30 days · daily</span>
+          </div>
+          <div className="bento-card__chart">
+            <ResponsiveContainer width="100%" height={260}>
+              <ComposedChart data={velocityData} barGap={0}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
+                  axisLine={false} tickLine={false}
+                  interval={4}
+                />
+                <YAxis
+                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
+                  axisLine={false} tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip content={<DarkTooltip />} />
+                <Bar
+                  dataKey="count"
+                  fill="var(--emerald)"
+                  radius={[4, 4, 0, 0]}
+                  name="Completed"
+                  maxBarSize={18}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="avg"
+                  stroke="var(--amber)"
+                  strokeWidth={2.5}
+                  dot={false}
+                  name="7-day avg"
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Recent Closes */}
+        <div className="bento-card bento-card--recent">
+          <div className="bento-card__header">
+            <ListChecks size={20} style={{ color: 'var(--emerald)' }} />
+            <h2>Recent Closes</h2>
+          </div>
+          <div className="recent-list">
+            {recentCloses.map(task => (
+              <div key={task.id} className="recent-item">
+                <CheckCircle2 size={14} style={{ color: 'var(--emerald)', flexShrink: 0, marginTop: 2 }} />
+                <div className="recent-item__info">
+                  <span className="recent-item__title">{task.title}</span>
+                  <span className="recent-item__meta">
+                    <span className="recent-item__folder">{task.folder}</span>
+                    {formatDistanceToNow(new Date(task.completed * 1000), { addSuffix: true })}
                   </span>
                 </div>
-              )}
-              <div className="meta-row">
-                <span className="meta-label">Modified</span>
-                <span>{timeAgo(selectedTask.modified)}</span>
               </div>
-            </div>
-            
-            {selectedTask.tags.length > 0 && (
-              <div className="task-detail__tags">
-                <span className="meta-label">Tags</span>
-                <div className="task-tags-list">
-                  {selectedTask.tags.map(tag => (
-                    <span key={tag} className="task-tag">{tag}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {selectedTask.note && (
-              <div className="task-detail__note">
-                <span className="meta-label">Notes</span>
-                <div className="task-note-content">{selectedTask.note}</div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="content-empty">
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 8 }}>✅</div>
-              <div>Select a task</div>
-            </div>
+            ))}
           </div>
-        )}
+        </div>
+
+        {/* New vs Retired */}
+        <div className="bento-card bento-card--nvr">
+          <div className="bento-card__header">
+            <BarChart3 size={20} style={{ color: 'var(--sky)' }} />
+            <h2>New vs Retired</h2>
+            <span className="bento-card__subtitle">Weekly</span>
+          </div>
+          <div className="bento-card__chart">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={newVsRetired} barGap={4}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
+                  axisLine={false} tickLine={false}
+                />
+                <YAxis
+                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
+                  axisLine={false} tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip content={<DarkTooltip />} />
+                <Legend
+                  wrapperStyle={{ paddingTop: 8 }}
+                  formatter={(value) => <span style={{ color: '#94A3B8', fontWeight: 700, fontSize: '0.72rem' }}>{value}</span>}
+                />
+                <Bar dataKey="created" fill="var(--sky)" radius={[4, 4, 0, 0]} name="✦ Created" maxBarSize={24} />
+                <Bar dataKey="retired" fill="var(--emerald)" radius={[4, 4, 0, 0]} name="✓ Completed" maxBarSize={24} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Backlog Trend */}
+        <div className="bento-card bento-card--backlog">
+          <div className="bento-card__header">
+            <Clock size={20} style={{ color: 'var(--amber)' }} />
+            <h2>Backlog Trend</h2>
+            <span className="bento-card__subtitle">Last 60 days</span>
+          </div>
+          <div className="bento-card__chart">
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={backlogData}>
+                <defs>
+                  <linearGradient id="backlogGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
+                  axisLine={false} tickLine={false}
+                  interval={9}
+                />
+                <YAxis
+                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
+                  axisLine={false} tickLine={false}
+                  domain={['dataMin - 10', 'dataMax + 10']}
+                />
+                <Tooltip content={<DarkTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="count"
+                  stroke="var(--amber)"
+                  strokeWidth={2.5}
+                  fill="url(#backlogGrad)"
+                  name="Open Tasks"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
     </div>
   );

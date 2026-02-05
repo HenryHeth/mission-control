@@ -16,7 +16,7 @@ const tabs: { id: Tab; name: string; icon: string }[] = [
 ];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<Tab>('docs');
+  const [activeTab, setActiveTab] = useState<Tab>('tasks');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
