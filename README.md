@@ -1,8 +1,8 @@
-# Mission Control v1.5
+# Mission Control v1.6
 
 **One app, one URL, one bookmark.** Everything Paul needs to manage his day without sitting at a desk.
 
-![Mission Control](https://img.shields.io/badge/version-1.5.0-blue)
+![Mission Control](https://img.shields.io/badge/version-1.6.0-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![Tailwind](https://img.shields.io/badge/Tailwind-4-38bdf8)
 
@@ -92,6 +92,49 @@ npm start
 - **Bento card layout** — Visual, instant, no reading required
 - **Mobile-first** — Works on phone without horizontal scroll
 
+## 🔐 Authentication Setup
+
+Mission Control uses Google OAuth for secure authentication. Only whitelisted email addresses can access the dashboard.
+
+### Required Environment Variables
+
+```bash
+# Generate with: openssl rand -base64 32
+AUTH_SECRET=your-auth-secret-here
+
+# Google OAuth credentials
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# NextAuth URL (set automatically by Vercel in production)
+NEXTAUTH_URL=http://localhost:3000
+```
+
+### Setting Up Google OAuth
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Navigate to **APIs & Services > Credentials**
+4. Click **Create Credentials > OAuth 2.0 Client ID**
+5. Select **Web application**
+6. Add authorized redirect URIs:
+   - `http://localhost:3000/api/auth/callback/google` (local dev)
+   - `https://mission-control-tan.vercel.app/api/auth/callback/google` (production)
+7. Copy the Client ID and Client Secret to your environment variables
+
+### Vercel Deployment
+
+Add these environment variables in Vercel Dashboard > Settings > Environment Variables:
+- `AUTH_SECRET`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+
+### Whitelisted Users
+
+Currently authorized: `paul@heth.ca`
+
+To add more users, edit the `ALLOWED_EMAILS` array in `src/auth.ts`.
+
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -125,6 +168,14 @@ vercel --prod
 Note: Production deployment uses bundled files (prebuild step). Live file server features require local development mode.
 
 ## 📋 Changelog
+
+### v1.6.0 (2026-02-06)
+- 🔐 Added Google OAuth authentication (NextAuth.js)
+- 🔐 Whitelist-only access (paul@heth.ca)
+- 🔐 Protected all routes via middleware
+- ✨ Sign-in page with Google OAuth
+- ✨ Sign-out button in navigation
+- ✨ Error page for access denied
 
 ### v1.5.0 (2026-02-05)
 - ✨ Added Homepage Dashboard tab with metrics

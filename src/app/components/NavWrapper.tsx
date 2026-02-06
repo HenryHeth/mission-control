@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation';
 import { ReactNode } from 'react';
 import { 
   Zap, CheckSquare, Brain, Camera, FileText, 
-  Settings, Target, LucideIcon
+  Settings, Target, LogOut, LucideIcon
 } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
 
 type Tab = 'dashboard' | 'tasks' | 'memory' | 'captures' | 'docs' | 'vvo' | 'system';
 
@@ -34,9 +35,14 @@ interface NavWrapperProps {
 
 export default function NavWrapper({ children, activeTab }: NavWrapperProps) {
   const router = useRouter();
+  const { data: session } = useSession();
 
   const handleTabClick = (path: string) => {
     router.push(path);
+  };
+
+  const handleSignOut = () => {
+    signOut({ callbackUrl: '/auth/signin' });
   };
 
   return (
@@ -69,9 +75,14 @@ export default function NavWrapper({ children, activeTab }: NavWrapperProps) {
         </div>
 
         <div className="nav-bar__actions">
-          <button className="nav-action-btn">
-            <span className="nav-action-btn__dot" />
-            Ping Henry
+          {session?.user && (
+            <span style={{ color: 'var(--text-dim)', fontSize: '12px', marginRight: '12px' }}>
+              {session.user.email}
+            </span>
+          )}
+          <button className="nav-action-btn" onClick={handleSignOut} title="Sign out">
+            <LogOut size={14} />
+            Sign out
           </button>
         </div>
       </div>
