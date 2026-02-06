@@ -90,14 +90,17 @@ interface MemorySystemInfo {
   memoryFolder: {
     totalSize: number;
     fileCount: number;
+    lastModified: string | null;
   };
   telegramDumps: {
     totalSize: number;
     fileCount: number;
+    lastModified: string | null;
   };
   voiceCalls: {
     totalSize: number;
     fileCount: number;
+    lastModified: string | null;
   };
 }
 
@@ -302,9 +305,19 @@ function SubAgentTimelineRow({ agent }: { agent: SubAgent }) {
 
 /* ═══════════════════════════════════════════════════════
    NEW: Telegram Dumps Section
+   Shows last 4 days with missing indicator
    ═══════════════════════════════════════════════════════ */
 
 function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
+  // Generate last 4 days for display
+  const last4Days = Array.from({ length: 4 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    const file = data.files.find(f => f.date === dateStr);
+    return { date: dateStr, file };
+  });
+
   return (
     <div className="system-status__card system-status__card--telegram">
       <div className="system-status__card-header">
@@ -318,10 +331,7 @@ function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
             <div className="telegram-dumps-row">
               <span className="telegram-dumps-label">Last Dump:</span>
               <span className="telegram-dumps-value">
-                {format(new Date(data.lastDump.lastModified), 'MMM d, h:mm a')}
-                <span className="telegram-dumps-meta">
-                  ({formatDistanceToNow(new Date(data.lastDump.lastModified), { addSuffix: true })})
-                </span>
+                {formatDistanceToNow(new Date(data.lastDump.lastModified), { addSuffix: true })}
               </span>
             </div>
             <div className="telegram-dumps-row">
@@ -334,9 +344,9 @@ function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
               </span>
             </div>
             <div className="telegram-dumps-row">
-              <span className="telegram-dumps-label">Location:</span>
+              <span className="telegram-dumps-label">Folder:</span>
               <span className="telegram-dumps-value telegram-dumps-path">
-                memory/telegram/{data.lastDump.filename}
+                memory/telegram/
               </span>
             </div>
           </>
@@ -347,29 +357,30 @@ function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
           </div>
         )}
         
-        {data.missingDays.length > 0 && (
-          <div className="telegram-dumps-missing">
-            <AlertTriangle size={14} style={{ color: 'var(--amber)' }} />
-            <span>Missing: {data.missingDays.map(d => format(new Date(d), 'MMM d')).join(', ')}</span>
-          </div>
-        )}
-        
         <div className="telegram-dumps-recent">
-          <div className="telegram-dumps-recent-label">Recent Files:</div>
-          <div className="telegram-dumps-file-grid">
-            {data.files.slice(0, 6).map(file => (
+          <div className="telegram-dumps-recent-label">Last 4 Days:</div>
+          <div className="telegram-dumps-day-list">
+            {last4Days.map(({ date, file }) => (
               <div 
-                key={file.filename}
-                className="telegram-dumps-file-item"
-                title={`${file.filename} - ${formatBytes(file.size)}`}
+                key={date}
+                className={`telegram-dumps-day-item ${file ? '' : 'telegram-dumps-day-item--missing'}`}
               >
-                <span className="telegram-dumps-file-date">
-                  {format(new Date(file.date), 'MMM d')}:
+                <span className="telegram-dumps-day-date">
+                  {format(new Date(date), 'MMM d')}
                 </span>
-                <span className="telegram-dumps-file-size">
-                  {formatBytes(file.size)}
-                </span>
-                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
+                {file ? (
+                  <>
+                    <span className="telegram-dumps-day-size">
+                      {formatBytes(file.size)}
+                    </span>
+                    <CheckCircle2 size={14} style={{ color: 'var(--emerald)' }} />
+                  </>
+                ) : (
+                  <>
+                    <span className="telegram-dumps-day-missing">Missing</span>
+                    <AlertTriangle size={14} style={{ color: 'var(--amber)' }} />
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -449,8 +460,47 @@ function HeartbeatHealthCard({ data }: { data: HeartbeatHealthInfo }) {
 
 /* ═══════════════════════════════════════════════════════
    Memory Flow Diagram Section
-   Visual cascade of memory hierarchy
+   Visual cascade of memory hierarchy with last update times
    ═══════════════════════════════════════════════════════ */
+
+function MemoryFlowLevel({ 
+  icon, 
+  name, 
+  label,
+  size, 
+  count, 
+  lastModified 
+}: { 
+  icon: React.ReactNode; 
+  name: string;
+  label: string;
+  size: number; 
+  count?: number;
+  lastModified: string | null;
+}) {
+  return (
+    <div className="memory-flow-level">
+      <div className="memory-flow-icon">{icon}</div>
+      <div className="memory-flow-info">
+        <div className="memory-flow-name">{name}</div>
+        <div className="memory-flow-label">{label}</div>
+        <div className="memory-flow-stats">
+          {count !== undefined && (
+            <span className="memory-flow-count">{count} files</span>
+          )}
+          <span className="memory-flow-size">{formatBytes(size)}</span>
+          {lastModified ? (
+            <span className="memory-flow-time">
+              {formatDistanceToNow(new Date(lastModified), { addSuffix: true })}
+            </span>
+          ) : (
+            <span className="memory-flow-missing">No updates</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function MemorySystemCard({ data }: { data: MemorySystemInfo }) {
   return (
@@ -461,75 +511,50 @@ function MemorySystemCard({ data }: { data: MemorySystemInfo }) {
       </div>
       
       <div className="memory-flow-diagram">
-        {/* Level 1: MEMORY.md */}
-        <div className="memory-flow-level memory-flow-level--primary">
-          <div className="memory-flow-icon">
-            <FileText size={18} style={{ color: 'var(--sky)' }} />
-          </div>
-          <div className="memory-flow-info">
-            <div className="memory-flow-name">MEMORY.md</div>
-            <div className="memory-flow-stats">
-              {data.memoryMd ? (
-                <>
-                  <span className="memory-flow-size">{formatBytes(data.memoryMd.size)}</span>
-                  <span className="memory-flow-time">
-                    {formatDistanceToNow(new Date(data.memoryMd.lastModified), { addSuffix: true })}
-                  </span>
-                </>
-              ) : (
-                <span className="memory-flow-missing">Not found</span>
-              )}
-            </div>
-          </div>
-        </div>
+        {/* Level 1: MEMORY.md (curated) */}
+        <MemoryFlowLevel
+          icon={<FileText size={18} style={{ color: 'var(--sky)' }} />}
+          name="MEMORY.md"
+          label="curated long-term"
+          size={data.memoryMd?.size || 0}
+          lastModified={data.memoryMd?.lastModified || null}
+        />
         
         <div className="memory-flow-arrow">↓</div>
         
-        {/* Level 2: memory/*.md */}
-        <div className="memory-flow-level">
-          <div className="memory-flow-icon">
-            <FolderOpen size={18} style={{ color: 'var(--emerald)' }} />
-          </div>
-          <div className="memory-flow-info">
-            <div className="memory-flow-name">memory/*.md</div>
-            <div className="memory-flow-stats">
-              <span className="memory-flow-count">{data.memoryFolder.fileCount} files</span>
-              <span className="memory-flow-size">{formatBytes(data.memoryFolder.totalSize)}</span>
-            </div>
-          </div>
-        </div>
+        {/* Level 2: memory/*.md (daily) */}
+        <MemoryFlowLevel
+          icon={<FolderOpen size={18} style={{ color: 'var(--emerald)' }} />}
+          name="memory/*.md"
+          label="daily notes"
+          size={data.memoryFolder.totalSize}
+          count={data.memoryFolder.fileCount}
+          lastModified={data.memoryFolder.lastModified}
+        />
         
         <div className="memory-flow-arrow">↓</div>
         
-        {/* Level 3: telegram/*.md */}
-        <div className="memory-flow-level">
-          <div className="memory-flow-icon">
-            <MessageSquare size={18} style={{ color: 'var(--sky)' }} />
-          </div>
-          <div className="memory-flow-info">
-            <div className="memory-flow-name">telegram/*.md</div>
-            <div className="memory-flow-stats">
-              <span className="memory-flow-count">{data.telegramDumps.fileCount} files</span>
-              <span className="memory-flow-size">{formatBytes(data.telegramDumps.totalSize)}</span>
-            </div>
-          </div>
-        </div>
+        {/* Level 3: telegram/*.md (chat dumps) */}
+        <MemoryFlowLevel
+          icon={<MessageSquare size={18} style={{ color: 'var(--sky)' }} />}
+          name="telegram/*.md"
+          label="chat dumps"
+          size={data.telegramDumps.totalSize}
+          count={data.telegramDumps.fileCount}
+          lastModified={data.telegramDumps.lastModified}
+        />
         
         <div className="memory-flow-arrow">↓</div>
         
-        {/* Level 4: voice-calls/*.txt */}
-        <div className="memory-flow-level">
-          <div className="memory-flow-icon">
-            <Mic size={18} style={{ color: 'var(--amber)' }} />
-          </div>
-          <div className="memory-flow-info">
-            <div className="memory-flow-name">voice-calls/*.txt</div>
-            <div className="memory-flow-stats">
-              <span className="memory-flow-count">{data.voiceCalls.fileCount} files</span>
-              <span className="memory-flow-size">{formatBytes(data.voiceCalls.totalSize)}</span>
-            </div>
-          </div>
-        </div>
+        {/* Level 4: voice-calls/*.txt (transcripts) */}
+        <MemoryFlowLevel
+          icon={<Mic size={18} style={{ color: 'var(--amber)' }} />}
+          name="voice-calls/*.txt"
+          label="transcripts"
+          size={data.voiceCalls.totalSize}
+          count={data.voiceCalls.fileCount}
+          lastModified={data.voiceCalls.lastModified}
+        />
       </div>
     </div>
   );
@@ -817,15 +842,18 @@ export default function SystemStatusTab() {
       },
       memoryFolder: {
         totalSize: 1258291,
-        fileCount: 58
+        fileCount: 58,
+        lastModified: new Date(now.getTime() - 30 * 60000).toISOString()
       },
       telegramDumps: {
         totalSize: 35840,
-        fileCount: 4
+        fileCount: 4,
+        lastModified: new Date(now.getTime() - 12 * 60000).toISOString()
       },
       voiceCalls: {
         totalSize: 911360,
-        fileCount: 85
+        fileCount: 85,
+        lastModified: new Date(now.getTime() - 24 * 3600000).toISOString()
       }
     });
 

@@ -48,14 +48,17 @@ interface MemorySystemInfo {
   memoryFolder: {
     totalSize: number;
     fileCount: number;
+    lastModified: string | null;
   };
   telegramDumps: {
     totalSize: number;
     fileCount: number;
+    lastModified: string | null;
   };
   voiceCalls: {
     totalSize: number;
     fileCount: number;
+    lastModified: string | null;
   };
 }
 
@@ -75,12 +78,13 @@ interface ContextUsageInfo {
   memoryFlush: MemoryFlushConfig | null;
 }
 
-function getDirSize(dirPath: string): { totalSize: number; fileCount: number } {
+function getDirStats(dirPath: string): { totalSize: number; fileCount: number; lastModified: string | null } {
   let totalSize = 0;
   let fileCount = 0;
+  let latestMtime: Date | null = null;
   
   try {
-    if (!fs.existsSync(dirPath)) return { totalSize: 0, fileCount: 0 };
+    if (!fs.existsSync(dirPath)) return { totalSize: 0, fileCount: 0, lastModified: null };
     
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
@@ -89,17 +93,30 @@ function getDirSize(dirPath: string): { totalSize: number; fileCount: number } {
         const stats = fs.statSync(filePath);
         totalSize += stats.size;
         fileCount++;
+        if (!latestMtime || stats.mtime > latestMtime) {
+          latestMtime = stats.mtime;
+        }
       } else if (entry.isDirectory()) {
-        const subResult = getDirSize(path.join(dirPath, entry.name));
+        const subResult = getDirStats(path.join(dirPath, entry.name));
         totalSize += subResult.totalSize;
         fileCount += subResult.fileCount;
+        if (subResult.lastModified) {
+          const subMtime = new Date(subResult.lastModified);
+          if (!latestMtime || subMtime > latestMtime) {
+            latestMtime = subMtime;
+          }
+        }
       }
     }
   } catch (e) {
-    console.error('getDirSize error:', e);
+    console.error('getDirStats error:', e);
   }
   
-  return { totalSize, fileCount };
+  return { 
+    totalSize, 
+    fileCount, 
+    lastModified: latestMtime ? latestMtime.toISOString() : null 
+  };
 }
 
 function countFileLines(filePath: string): number {
@@ -174,9 +191,9 @@ function getTelegramDumps(): TelegramDumpsInfo {
 function getMemorySystemInfo(): MemorySystemInfo {
   const result: MemorySystemInfo = {
     memoryMd: null,
-    memoryFolder: { totalSize: 0, fileCount: 0 },
-    telegramDumps: { totalSize: 0, fileCount: 0 },
-    voiceCalls: { totalSize: 0, fileCount: 0 }
+    memoryFolder: { totalSize: 0, fileCount: 0, lastModified: null },
+    telegramDumps: { totalSize: 0, fileCount: 0, lastModified: null },
+    voiceCalls: { totalSize: 0, fileCount: 0, lastModified: null }
   };
   
   try {
@@ -191,6 +208,7 @@ function getMemorySystemInfo(): MemorySystemInfo {
     
     // Memory folder (*.md files only, not subdirs)
     if (fs.existsSync(MEMORY_DIR)) {
+      let latestMtime: Date | null = null;
       const entries = fs.readdirSync(MEMORY_DIR);
       for (const entry of entries) {
         const entryPath = path.join(MEMORY_DIR, entry);
@@ -198,15 +216,19 @@ function getMemorySystemInfo(): MemorySystemInfo {
         if (stats.isFile() && entry.endsWith('.md')) {
           result.memoryFolder.totalSize += stats.size;
           result.memoryFolder.fileCount++;
+          if (!latestMtime || stats.mtime > latestMtime) {
+            latestMtime = stats.mtime;
+          }
         }
       }
+      result.memoryFolder.lastModified = latestMtime ? latestMtime.toISOString() : null;
     }
     
     // Telegram dumps
-    result.telegramDumps = getDirSize(TELEGRAM_DIR);
+    result.telegramDumps = getDirStats(TELEGRAM_DIR);
     
     // Voice calls
-    result.voiceCalls = getDirSize(VOICE_CALLS_DIR);
+    result.voiceCalls = getDirStats(VOICE_CALLS_DIR);
   } catch (e) {
     console.error('getMemorySystemInfo error:', e);
   }
