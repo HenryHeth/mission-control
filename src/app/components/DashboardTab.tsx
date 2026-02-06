@@ -140,45 +140,67 @@ export default function DashboardTab() {
 
   // Generate sample data (will be replaced by live APIs)
   const generateSampleData = () => {
-    // Desk sitting (Home Assistant) - hours today
-    const deskHours = 5.2 + Math.random() * 3;
+    // 7-day sitting data for chart
+    const now = new Date();
+    const sitting: DailySitting[] = [];
+    let totalDesk = 0;
+    let totalComputer = 0;
+    let totalMobile = 0;
+    let totalYoutube = 0;
     
-    // RescueTime metrics (sample)
-    const computerHours = 3.5 + Math.random() * 2;
-    const mobileHours = 2.1 + Math.random() * 2;
-    const youtubeHours = 0.5 + Math.random() * 1.5;
+    for (let i = 6; i >= 0; i--) {
+      const d = subDays(now, i);
+      const dayDesk = 3 + Math.random() * 5;
+      sitting.push({
+        date: format(d, 'yyyy-MM-dd'),
+        label: format(d, 'EEE'),
+        hours: dayDesk
+      });
+      totalDesk += dayDesk;
+      totalComputer += 2.5 + Math.random() * 3;
+      totalMobile += 1.5 + Math.random() * 2;
+      totalYoutube += 0.3 + Math.random() * 1.2;
+    }
+    
+    setSittingData(sitting);
+    
+    // 7-day averages for metrics
+    const avgDesk = totalDesk / 7;
+    const avgComputer = totalComputer / 7;
+    const avgMobile = totalMobile / 7;
+    const avgYoutube = totalYoutube / 7;
     const pulse = 55 + Math.floor(Math.random() * 30);
     
     const newMetrics: MetricData[] = [
       {
         label: 'DESK',
-        value: deskHours,
+        value: avgDesk,
         goal: 4,
-        unit: 'h',
+        unit: 'h/d',
         color: 'var(--amber)',
         icon: <Monitor size={16} />,
         trend: -5
       },
       {
         label: 'COMPUTER',
-        value: computerHours,
-        unit: 'h',
+        value: avgComputer,
+        unit: 'h/d',
         color: 'var(--sky)',
         icon: <Monitor size={16} />,
         trend: 12
       },
       {
         label: 'MOBILE',
-        value: mobileHours,
-        unit: 'h',
+        value: avgMobile,
+        unit: 'h/d',
         color: 'var(--emerald)',
         icon: <Smartphone size={16} />,
         trend: -8
       },
       {
         label: 'YOUTUBE',
-        value: youtubeHours,
-        unit: 'h',
+        value: avgYoutube,
+        unit: 'h/d',
         color: 'var(--red)',
         icon: <Youtube size={16} />,
         trend: 25
@@ -188,28 +210,13 @@ export default function DashboardTab() {
     setMetrics(newMetrics);
     setProductivityPulse(pulse);
     
-    // Task summary
+    // Task summary - show week totals more prominently
     setTaskSummary({
       dueToday: 3 + Math.floor(Math.random() * 5),
       overdue: Math.floor(Math.random() * 3),
       completedToday: 2 + Math.floor(Math.random() * 4),
       completedWeek: 15 + Math.floor(Math.random() * 20)
     });
-    
-    // 7-day sitting data for chart
-    const now = new Date();
-    const sitting: DailySitting[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = subDays(now, i);
-      sitting.push({
-        date: format(d, 'yyyy-MM-dd'),
-        label: format(d, 'EEE'),
-        hours: 3 + Math.random() * 5
-      });
-    }
-    // Today's actual value
-    sitting[6].hours = deskHours;
-    setSittingData(sitting);
   };
 
   // Fetch live data
@@ -288,11 +295,11 @@ export default function DashboardTab() {
 
       {/* Main Grid */}
       <div className="dashboard__grid">
-        {/* Today's Metrics */}
+        {/* Last 7 Days Metrics */}
         <div className="dashboard__card dashboard__card--metrics">
           <div className="dashboard__card-header">
             <Activity size={18} style={{ color: 'var(--sky)' }} />
-            <h2>Today&apos;s Metrics</h2>
+            <h2>Last 7 Days</h2>
           </div>
           <div className="metrics-list">
             {metrics.map(metric => (

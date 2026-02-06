@@ -368,41 +368,72 @@ export default function SystemStatusTab() {
   }, []);
 
   const checkLiveServices = useCallback(async () => {
+    // Service endpoints to check - using various fallback URLs
     const serviceChecks = [
-      { name: 'Clawdbot Gateway', url: 'http://localhost:3001/health', details: 'Port 3001' },
-      { name: 'Voice Server', url: 'http://localhost:6060/health', details: 'Port 6060' },
-      { name: 'File Server', url: 'http://localhost:3456/health', details: 'Port 3456' },
+      { 
+        name: 'Clawdbot Gateway', 
+        urls: ['http://localhost:3001/health', 'http://localhost:3001', 'http://127.0.0.1:3001/health'],
+        details: 'Port 3001' 
+      },
+      { 
+        name: 'Voice Server', 
+        urls: ['http://localhost:6060/health', 'http://localhost:6060', 'http://127.0.0.1:6060'],
+        details: 'Port 6060' 
+      },
+      { 
+        name: 'File Server', 
+        urls: ['http://localhost:3456/health', 'http://localhost:3456/api/health', 'http://127.0.0.1:3456'],
+        details: 'Port 3456' 
+      },
+      { 
+        name: 'Browser Proxy', 
+        urls: ['http://localhost:18800/json/version', 'http://127.0.0.1:18800/json/version'],
+        details: 'Port 18800' 
+      },
     ];
 
     const results: ServiceStatus[] = [];
 
     for (const svc of serviceChecks) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 2000);
-        const res = await fetch(svc.url, { signal: controller.signal });
-        clearTimeout(timeout);
-        
-        results.push({
-          name: svc.name,
-          status: res.ok ? 'online' : 'degraded',
-          lastCheck: new Date(),
-          details: svc.details
-        });
-      } catch {
-        results.push({
-          name: svc.name,
-          status: 'offline',
-          lastCheck: new Date(),
-          details: svc.details
-        });
+      let isOnline = false;
+      let statusDetails = svc.details;
+      
+      // Try each URL until one works
+      for (const url of svc.urls) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 2000);
+          const res = await fetch(url, { 
+            signal: controller.signal,
+            mode: 'no-cors' // Allow cross-origin requests
+          });
+          clearTimeout(timeout);
+          
+          // With no-cors, we can't read the response but if we get here, the server responded
+          isOnline = true;
+          break;
+        } catch {
+          // Try next URL
+          continue;
+        }
       }
+      
+      results.push({
+        name: svc.name,
+        status: isOnline ? 'online' : 'offline',
+        lastCheck: new Date(),
+        details: statusDetails
+      });
     }
 
-    setServices(prev => {
-      const browserProxy = prev.find(s => s.name === 'Browser Proxy');
-      return browserProxy ? [...results, browserProxy] : results;
-    });
+    setServices(results);
+    
+    // Update voice metrics if voice server is online
+    const voiceOnline = results.find(s => s.name === 'Voice Server')?.status === 'online';
+    setVoiceMetrics(prev => ({
+      ...prev,
+      status: voiceOnline ? 'online' : 'offline'
+    }));
   }, []);
 
   useEffect(() => {

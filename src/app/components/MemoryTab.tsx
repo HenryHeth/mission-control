@@ -3,75 +3,118 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Brain, Search, Calendar, FileText, Clock, RefreshCw } from 'lucide-react';
-import { format, subDays, parseISO, isToday, isYesterday } from 'date-fns';
+import { Brain, FileText, Settings, User, BookOpen, Wrench, Edit3, Save, X, RefreshCw } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════
-   Mission Control — Memory Tab
-   Daily notes + MEMORY.md long-term context + Search
+   Mission Control — Memory Tab v1.5
+   Direct access to workspace config files:
+   - MEMORY.md (editable)
+   - SOUL.md
+   - TOOLS.md
+   - USER.md
+   - AGENTS.md
+   - clawdbot.json
    ═══════════════════════════════════════════════════════ */
 
 const LIVE_API_URL = process.env.NEXT_PUBLIC_LIVE_API_URL || 'http://localhost:3456';
 
-interface MemoryFile {
+interface WorkspaceFile {
+  id: string;
   name: string;
   path: string;
-  size: number;
-  lastModified: string;
-  tags: string[];
-  title: string;
-  type: string;
+  icon: React.ReactNode;
+  color: string;
+  description: string;
+  editable: boolean;
 }
 
-interface FileContent {
-  filename: string;
-  metadata: Record<string, unknown>;
-  content: string;
-  lastModified: string;
-  source?: string;
-}
+const WORKSPACE_FILES: WorkspaceFile[] = [
+  {
+    id: 'memory',
+    name: 'MEMORY.md',
+    path: 'MEMORY.md',
+    icon: <Brain size={18} />,
+    color: 'var(--emerald)',
+    description: "Henry's long-term memory — curated insights and lessons",
+    editable: true
+  },
+  {
+    id: 'soul',
+    name: 'SOUL.md',
+    path: 'SOUL.md',
+    icon: <User size={18} />,
+    color: 'var(--sky)',
+    description: "Henry's identity, personality, and core values",
+    editable: false
+  },
+  {
+    id: 'tools',
+    name: 'TOOLS.md',
+    path: 'TOOLS.md',
+    icon: <Wrench size={18} />,
+    color: 'var(--amber)',
+    description: 'Tool configurations, integrations, and local notes',
+    editable: true
+  },
+  {
+    id: 'user',
+    name: 'USER.md',
+    path: 'USER.md',
+    icon: <User size={18} />,
+    color: 'var(--purple, #8B5CF6)',
+    description: "Paul's profile, preferences, and context",
+    editable: false
+  },
+  {
+    id: 'agents',
+    name: 'AGENTS.md',
+    path: 'AGENTS.md',
+    icon: <BookOpen size={18} />,
+    color: 'var(--orange, #F97316)',
+    description: 'Agent workspace protocols and conventions',
+    editable: true
+  },
+  {
+    id: 'config',
+    name: 'clawdbot.json',
+    path: '../.clawdbot/clawdbot.json',
+    icon: <Settings size={18} />,
+    color: 'var(--text-muted)',
+    description: 'Clawdbot configuration — models, routing, plugins',
+    editable: false
+  }
+];
 
 type DataSource = 'live' | 'bundled' | 'checking';
-type ViewFilter = 'all' | 'daily' | 'long-term';
 
-function timeAgo(dateString: string): string {
-  const d = new Date(dateString);
-  const now = new Date();
-  const ms = now.getTime() - d.getTime();
-  const mins = Math.floor(ms / 60000);
-  const hrs = Math.floor(ms / 3600000);
-  const days = Math.floor(ms / 86400000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  if (hrs < 24) return `${hrs}h ago`;
-  if (days === 1) return '1 day ago';
-  if (days < 30) return `${days} days ago`;
-  return `${Math.floor(days / 30)} months ago`;
-}
-
-function formatFileDate(filename: string): string {
-  const match = filename.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (match) {
-    const date = parseISO(match[1]);
-    if (isToday(date)) return 'Today';
-    if (isYesterday(date)) return 'Yesterday';
-    return format(date, 'EEE, MMM d');
-  }
-  return filename.replace('.md', '');
-}
-
-function getMemoryIcon(filename: string): React.ReactNode {
-  if (filename.match(/^\d{4}-\d{2}-\d{2}/)) {
-    return <Calendar size={14} style={{ color: 'var(--amber)' }} />;
-  }
-  if (filename === 'MEMORY.md') {
-    return <Brain size={14} style={{ color: 'var(--emerald)' }} />;
-  }
-  return <FileText size={14} style={{ color: 'var(--sky)' }} />;
-}
-
-function wordCount(s: string): number {
-  return s.split(/\s+/).filter(Boolean).length;
+function FileCard({ 
+  file, 
+  isSelected, 
+  onClick 
+}: { 
+  file: WorkspaceFile; 
+  isSelected: boolean; 
+  onClick: () => void;
+}) {
+  return (
+    <div 
+      className={`workspace-file-card ${isSelected ? 'workspace-file-card--selected' : ''}`}
+      onClick={onClick}
+    >
+      <div className="workspace-file-card__icon" style={{ color: file.color }}>
+        {file.icon}
+      </div>
+      <div className="workspace-file-card__info">
+        <div className="workspace-file-card__name">{file.name}</div>
+        <div className="workspace-file-card__desc">{file.description}</div>
+      </div>
+      {file.editable && (
+        <div className="workspace-file-card__badge">
+          <Edit3 size={12} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 function fmtSize(b: number): string {
@@ -80,311 +123,258 @@ function fmtSize(b: number): string {
   return (b / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function wordCount(s: string): number {
+  return s.split(/\s+/).filter(Boolean).length;
+}
+
 export default function MemoryTab() {
-  const [files, setFiles] = useState<MemoryFile[]>([]);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [fileContent, setFileContent] = useState<FileContent | null>(null);
+  const [selectedFile, setSelectedFile] = useState<WorkspaceFile>(WORKSPACE_FILES[0]);
+  const [fileContent, setFileContent] = useState<string>('');
+  const [originalContent, setOriginalContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [contentLoading, setContentLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewFilter, setViewFilter] = useState<ViewFilter>('all');
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [dataSource, setDataSource] = useState<DataSource>('checking');
   const [liveApiAvailable, setLiveApiAvailable] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lastModified, setLastModified] = useState<string | null>(null);
 
-  // Filter to only memory files (daily logs, MEMORY.md, etc.)
-  const memoryFiles = useMemo(() => {
-    return files.filter(f => {
-      // Include daily logs (YYYY-MM-DD.md)
-      if (f.name.match(/^\d{4}-\d{2}-\d{2}\.md$/)) return true;
-      // Include MEMORY.md
-      if (f.name === 'MEMORY.md') return true;
-      // Include files in memory/ directory
-      if (f.path.startsWith('memory/') && !f.path.includes('voice-calls/') && !f.path.includes('telegram/')) return true;
-      return false;
-    });
-  }, [files]);
+  const hasChanges = useMemo(() => {
+    return editing && fileContent !== originalContent;
+  }, [editing, fileContent, originalContent]);
 
-  // Apply filters
-  const filteredFiles = useMemo(() => {
-    let result = memoryFiles;
+  const loadFile = useCallback(async (file: WorkspaceFile) => {
+    setLoading(true);
+    setError(null);
+    setEditing(false);
     
-    // Filter by view type
-    if (viewFilter === 'daily') {
-      result = result.filter(f => f.name.match(/^\d{4}-\d{2}-\d{2}\.md$/));
-    } else if (viewFilter === 'long-term') {
-      result = result.filter(f => !f.name.match(/^\d{4}-\d{2}-\d{2}\.md$/));
-    }
-    
-    // Filter by search
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      result = result.filter(f => 
-        f.name.toLowerCase().includes(q) || 
-        f.title.toLowerCase().includes(q) ||
-        f.path.toLowerCase().includes(q)
-      );
-    }
-    
-    // Sort: MEMORY.md first, then daily logs by date (newest first), then others
-    return result.sort((a, b) => {
-      if (a.name === 'MEMORY.md') return -1;
-      if (b.name === 'MEMORY.md') return 1;
-      return new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime();
-    });
-  }, [memoryFiles, viewFilter, searchTerm]);
-
-  // Stats
-  const stats = useMemo(() => {
-    const dailyCount = memoryFiles.filter(f => f.name.match(/^\d{4}-\d{2}-\d{2}\.md$/)).length;
-    const totalSize = memoryFiles.reduce((sum, f) => sum + f.size, 0);
-    return { 
-      total: memoryFiles.length, 
-      daily: dailyCount, 
-      other: memoryFiles.length - dailyCount,
-      totalSize 
-    };
-  }, [memoryFiles]);
-
-  const fetchFiles = useCallback(async () => {
-    // Try live API
+    // Try live API first
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`${LIVE_API_URL}/api/files`, { signal: controller.signal });
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`${LIVE_API_URL}/api/files/${encodeURIComponent(file.path)}`, { 
+        signal: controller.signal 
+      });
       clearTimeout(timeout);
       
       if (res.ok) {
         const data = await res.json();
-        if (data.files && data.source === 'live') {
-          setFiles(data.files);
-          setDataSource('live');
-          setLiveApiAvailable(true);
-          setLoading(false);
-          return;
-        }
+        setFileContent(data.content || '');
+        setOriginalContent(data.content || '');
+        setLastModified(data.lastModified || null);
+        setDataSource('live');
+        setLiveApiAvailable(true);
+        setLoading(false);
+        return;
       }
-    } catch {
+    } catch (e) {
       // Fall through to bundled
     }
 
-    // Fallback: bundled /api/docs
+    // Fallback: try bundled API
+    setLiveApiAvailable(false);
     try {
-      setLiveApiAvailable(false);
-      const res = await fetch('/api/docs');
-      const data = await res.json();
-      setFiles(data.files || []);
-      setDataSource('bundled');
+      const res = await fetch(`/api/docs?file=${encodeURIComponent(file.name)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFileContent(data.content || '');
+        setOriginalContent(data.content || '');
+        setLastModified(data.lastModified || null);
+        setDataSource('bundled');
+      } else {
+        setError(`File not found: ${file.name}`);
+        setFileContent('');
+        setDataSource('bundled');
+      }
     } catch (e) {
-      console.error('Failed to fetch files:', e);
-      setFiles([]);
+      console.error('Failed to load file:', e);
+      setError('Failed to load file');
+      setFileContent('');
       setDataSource('bundled');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const selectFile = async (filePath: string) => {
-    setSelectedFile(filePath);
-    setContentLoading(true);
-
-    // Try live API first if available
-    if (liveApiAvailable) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const res = await fetch(`${LIVE_API_URL}/api/files/${encodeURIComponent(filePath)}`, { signal: controller.signal });
-        clearTimeout(timeout);
-
-        if (res.ok) {
-          const data = await res.json();
-          setFileContent(data);
-          setContentLoading(false);
-          return;
-        }
-      } catch {
-        // Fall through to bundled
-      }
-    }
-
-    // Fallback: bundled API
-    const name = filePath.includes('/') ? filePath.split('/').pop()! : filePath;
+  const saveFile = useCallback(async () => {
+    if (!liveApiAvailable || !selectedFile.editable) return;
+    
+    setSaving(true);
+    setError(null);
+    
     try {
-      const res = await fetch(`/api/docs?file=${encodeURIComponent(name)}`);
+      const res = await fetch(`${LIVE_API_URL}/api/files/${encodeURIComponent(selectedFile.path)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: fileContent })
+      });
+      
       if (res.ok) {
-        setFileContent(await res.json());
+        setOriginalContent(fileContent);
+        setEditing(false);
+        setLastModified(new Date().toISOString());
       } else {
-        setFileContent(null);
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Failed to save file');
       }
     } catch (e) {
-      console.error('Failed to load file:', e);
-      setFileContent(null);
+      console.error('Failed to save:', e);
+      setError('Failed to save file');
     } finally {
-      setContentLoading(false);
+      setSaving(false);
     }
-  };
+  }, [liveApiAvailable, selectedFile, fileContent]);
+
+  const cancelEditing = useCallback(() => {
+    setFileContent(originalContent);
+    setEditing(false);
+  }, [originalContent]);
 
   useEffect(() => {
-    fetchFiles();
-    const interval = setInterval(() => {
-      if (liveApiAvailable) fetchFiles();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [fetchFiles, liveApiAvailable]);
+    loadFile(selectedFile);
+  }, [selectedFile, loadFile]);
 
-  // Auto-select MEMORY.md or today's file on load
-  useEffect(() => {
-    if (!loading && !selectedFile && filteredFiles.length > 0) {
-      // Try to find today's daily log
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const todayFile = filteredFiles.find(f => f.name === `${today}.md`);
-      if (todayFile) {
-        selectFile(todayFile.path);
-      } else if (filteredFiles[0]) {
-        selectFile(filteredFiles[0].path);
+  const handleSelectFile = (file: WorkspaceFile) => {
+    if (hasChanges) {
+      if (!window.confirm('You have unsaved changes. Discard them?')) {
+        return;
       }
     }
-  }, [loading, filteredFiles, selectedFile]);
+    setSelectedFile(file);
+  };
 
-  if (loading) {
-    return (
-      <div className="memory-layout">
-        <div className="content-empty">
-          <Brain size={32} className="pulse" style={{ color: 'var(--emerald)', opacity: 0.5 }} />
-          <span className="loading-text">Loading memory...</span>
-        </div>
-      </div>
-    );
-  }
+  const isJsonFile = selectedFile.name.endsWith('.json');
 
   return (
-    <div className="memory-layout">
-      {/* Sidebar */}
-      <div className="memory-sidebar">
-        {/* Header */}
-        <div className="memory-sidebar__header">
-          <div className="memory-sidebar__title">
-            <Brain size={18} style={{ color: 'var(--emerald)' }} />
-            <span>Memory</span>
-          </div>
+    <div className="memory-layout-v2">
+      {/* Sidebar - File Cards */}
+      <div className="memory-sidebar-v2">
+        <div className="memory-sidebar-v2__header">
+          <Brain size={20} style={{ color: 'var(--emerald)' }} />
+          <span>Workspace Files</span>
           <span className={`source-badge source-badge--${dataSource}`}>
             {dataSource === 'live' ? '🟢' : '🟡'}
           </span>
         </div>
 
-        {/* Stats */}
-        <div className="memory-stats">
-          <div className="memory-stat">
-            <span className="memory-stat__value">{stats.total}</span>
-            <span className="memory-stat__label">Files</span>
-          </div>
-          <div className="memory-stat">
-            <span className="memory-stat__value">{stats.daily}</span>
-            <span className="memory-stat__label">Daily</span>
-          </div>
-          <div className="memory-stat">
-            <span className="memory-stat__value">{fmtSize(stats.totalSize)}</span>
-            <span className="memory-stat__label">Size</span>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="memory-sidebar__search">
-          <Search size={14} className="memory-sidebar__search-icon" />
-          <input
-            className="memory-sidebar__input"
-            placeholder="Search memory..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-          />
-        </div>
-
-        {/* Filter buttons */}
-        <div className="memory-filters">
-          {(['all', 'daily', 'long-term'] as ViewFilter[]).map(filter => (
-            <button
-              key={filter}
-              className={`memory-filter ${viewFilter === filter ? 'memory-filter--active' : ''}`}
-              onClick={() => setViewFilter(filter)}
-            >
-              {filter === 'all' ? 'All' : filter === 'daily' ? 'Daily' : 'Long-term'}
-            </button>
+        <div className="memory-sidebar-v2__files">
+          {WORKSPACE_FILES.map(file => (
+            <FileCard
+              key={file.id}
+              file={file}
+              isSelected={selectedFile.id === file.id}
+              onClick={() => handleSelectFile(file)}
+            />
           ))}
         </div>
 
-        {/* File list */}
-        <div className="memory-sidebar__list">
-          {filteredFiles.map(file => (
-            <div
-              key={file.path}
-              onClick={() => selectFile(file.path)}
-              className={`memory-item ${selectedFile === file.path ? 'memory-item--selected' : ''}`}
-            >
-              {getMemoryIcon(file.name)}
-              <div className="memory-item__info">
-                <div className="memory-item__name">
-                  {file.name.match(/^\d{4}-\d{2}-\d{2}\.md$/) 
-                    ? formatFileDate(file.name)
-                    : file.name.replace('.md', '')}
-                </div>
-                <div className="memory-item__meta">
-                  <span>{fmtSize(file.size)}</span>
-                  <span>·</span>
-                  <span>{timeAgo(file.lastModified)}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-          {filteredFiles.length === 0 && (
-            <div className="content-empty" style={{ padding: 20 }}>
-              <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>
-                {searchTerm ? 'No files match' : 'No memory files'}
-              </span>
-            </div>
-          )}
+        <div className="memory-sidebar-v2__footer">
+          <div className="memory-sidebar-v2__hint">
+            <Edit3 size={12} />
+            <span>Editable files can be modified in-browser</span>
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="memory-content">
-        {selectedFile && fileContent ? (
-          <>
-            <div className="memory-content__header">
-              <div className="memory-content__title">
-                {getMemoryIcon(fileContent.filename)}
-                <span>{fileContent.filename.replace('.md', '')}</span>
-                {fileContent.source === 'live' && (
-                  <span className="source-badge source-badge--live" style={{ fontSize: 10 }}>LIVE</span>
-                )}
-              </div>
-              <div className="memory-content__meta">
-                <span>{fmtSize(fileContent.content?.length || 0)}</span>
-                <span>·</span>
-                <span>{wordCount(fileContent.content || '').toLocaleString()} words</span>
-                <span>·</span>
-                <Clock size={12} />
-                <span>{timeAgo(fileContent.lastModified)}</span>
-              </div>
-            </div>
-            <div className="memory-content__body">
-              {contentLoading ? (
-                <div className="content-empty">
-                  <span className="loading-text">Loading...</span>
-                </div>
-              ) : (
-                <div className="md-content">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {fileContent.content}
-                  </ReactMarkdown>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="content-empty">
-            <Brain size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
-            <span>Select a memory file</span>
+      {/* Content Area */}
+      <div className="memory-content-v2">
+        {/* Header */}
+        <div className="memory-content-v2__header">
+          <div className="memory-content-v2__title">
+            <span style={{ color: selectedFile.color }}>{selectedFile.icon}</span>
+            <span>{selectedFile.name}</span>
+            {dataSource === 'live' && (
+              <span className="source-badge source-badge--live" style={{ fontSize: 10 }}>LIVE</span>
+            )}
+          </div>
+          
+          <div className="memory-content-v2__actions">
+            {selectedFile.editable && liveApiAvailable && !editing && (
+              <button 
+                className="memory-action-btn memory-action-btn--edit"
+                onClick={() => setEditing(true)}
+              >
+                <Edit3 size={14} />
+                Edit
+              </button>
+            )}
+            {editing && (
+              <>
+                <button 
+                  className="memory-action-btn memory-action-btn--cancel"
+                  onClick={cancelEditing}
+                  disabled={saving}
+                >
+                  <X size={14} />
+                  Cancel
+                </button>
+                <button 
+                  className="memory-action-btn memory-action-btn--save"
+                  onClick={saveFile}
+                  disabled={saving || !hasChanges}
+                >
+                  <Save size={14} />
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </>
+            )}
+            <button 
+              className="memory-action-btn"
+              onClick={() => loadFile(selectedFile)}
+              disabled={loading}
+            >
+              <RefreshCw size={14} className={loading ? 'spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        {/* Meta info */}
+        <div className="memory-content-v2__meta">
+          <span>{fmtSize(fileContent.length)}</span>
+          <span>·</span>
+          <span>{wordCount(fileContent).toLocaleString()} words</span>
+          {lastModified && (
+            <>
+              <span>·</span>
+              <span>Modified: {new Date(lastModified).toLocaleString()}</span>
+            </>
+          )}
+          {hasChanges && (
+            <span className="unsaved-indicator">● Unsaved changes</span>
+          )}
+        </div>
+
+        {/* Error display */}
+        {error && (
+          <div className="memory-content-v2__error">
+            {error}
           </div>
         )}
+
+        {/* Content body */}
+        <div className="memory-content-v2__body">
+          {loading ? (
+            <div className="content-empty">
+              <Brain size={32} className="pulse" style={{ color: 'var(--emerald)', opacity: 0.5 }} />
+              <span className="loading-text">Loading...</span>
+            </div>
+          ) : editing ? (
+            <textarea
+              className="memory-editor"
+              value={fileContent}
+              onChange={(e) => setFileContent(e.target.value)}
+              spellCheck={false}
+            />
+          ) : isJsonFile ? (
+            <pre className="json-content">{fileContent}</pre>
+          ) : (
+            <div className="md-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {fileContent}
+              </ReactMarkdown>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -2,16 +2,29 @@
 
 import { useRouter } from 'next/navigation';
 import { ReactNode } from 'react';
+import { 
+  Zap, CheckSquare, Brain, Camera, FileText, 
+  Settings, Target, LucideIcon
+} from 'lucide-react';
 
-type Tab = 'dashboard' | 'tasks' | 'memory' | 'captures' | 'docs' | 'system';
+type Tab = 'dashboard' | 'tasks' | 'memory' | 'captures' | 'docs' | 'vvo' | 'system';
 
-const tabs: { id: Tab; name: string; icon: string; path: string }[] = [
-  { id: 'dashboard', name: 'Mission Control', icon: '❖', path: '/' },
-  { id: 'tasks', name: 'Tasks', icon: '✅', path: '/velocity' },
-  { id: 'memory', name: 'Memory', icon: '🧠', path: '/memory' },
-  { id: 'captures', name: 'Captures', icon: '📸', path: '/captures' },
-  { id: 'docs', name: 'Docs', icon: '📄', path: '/docs' },
-  { id: 'system', name: 'System', icon: '🔧', path: '/system' },
+interface TabConfig {
+  id: Tab;
+  name: string;
+  icon: LucideIcon;
+  path: string;
+  color: string;
+}
+
+const tabs: TabConfig[] = [
+  { id: 'dashboard', name: 'Mission Control', icon: Zap, path: '/', color: 'var(--amber)' },
+  { id: 'tasks', name: 'Tasks', icon: CheckSquare, path: '/velocity', color: 'var(--emerald)' },
+  { id: 'vvo', name: 'VVO', icon: Target, path: '/vvo', color: 'var(--amber)' },
+  { id: 'memory', name: 'Memory', icon: Brain, path: '/memory', color: 'var(--emerald)' },
+  { id: 'captures', name: 'Captures', icon: Camera, path: '/captures', color: 'var(--sky)' },
+  { id: 'docs', name: 'Docs', icon: FileText, path: '/docs', color: 'var(--text-muted)' },
+  { id: 'system', name: 'System', icon: Settings, path: '/system', color: 'var(--sky)' },
 ];
 
 interface NavWrapperProps {
@@ -28,29 +41,38 @@ export default function NavWrapper({ children, activeTab }: NavWrapperProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      {/* Top Navigation Bar */}
-      <div className="top-nav">
-        <div className="top-nav__logo">
-          <span className="top-nav__logo-icon">❖</span>
-          <span className="top-nav__logo-text">Mission Control</span>
+      {/* Top Navigation Bar - Dark Bento Style */}
+      <div className="nav-bar">
+        <div className="nav-bar__logo">
+          <Zap size={18} style={{ color: 'var(--amber)' }} />
+          <span className="nav-bar__logo-text">Mission Control</span>
         </div>
 
-        <div className="top-nav__tabs">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabClick(tab.path)}
-              className={`top-nav__tab ${activeTab === tab.id ? 'top-nav__tab--active' : ''}`}
-            >
-              <span className="top-nav__tab-icon">{tab.icon}</span>
-              <span>{tab.name}</span>
-            </button>
-          ))}
+        <div className="nav-bar__tabs">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabClick(tab.path)}
+                className={`nav-tab ${isActive ? 'nav-tab--active' : ''}`}
+              >
+                <Icon 
+                  size={16} 
+                  style={{ color: isActive ? tab.color : 'var(--text-dim)' }}
+                />
+                <span className={isActive ? 'nav-tab__text--active' : ''}>{tab.name}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="top-nav__actions">
-          <button className="top-nav__action">⏸ Pause</button>
-          <button className="top-nav__action">Ping Henry</button>
+        <div className="nav-bar__actions">
+          <button className="nav-action-btn">
+            <span className="nav-action-btn__dot" />
+            Ping Henry
+          </button>
         </div>
       </div>
 
