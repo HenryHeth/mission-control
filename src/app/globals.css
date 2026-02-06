@@ -3497,3 +3497,383 @@ body {
   word-break: break-word;
   line-height: 1.7;
 }
+
+/* ═══════════════════════════════════════════════════════
+   System Status Tab — Enhanced Sections (v2.0)
+   Telegram Dumps, Heartbeat Health, Memory System, Context
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Telegram Dumps ── */
+.system-status__card--telegram,
+.system-status__card--heartbeat,
+.system-status__card--memory-system,
+.system-status__card--context {
+  grid-column: span 1;
+}
+
+.telegram-dumps-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.telegram-dumps-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.telegram-dumps-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.telegram-dumps-value {
+  font-size: 0.8rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.telegram-dumps-meta {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.telegram-dumps-path {
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--sky);
+  background: rgba(56, 189, 248, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.telegram-dumps-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--amber-dim);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  color: var(--amber);
+}
+
+.telegram-dumps-missing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--amber-dim);
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  color: var(--amber);
+  margin-top: 8px;
+}
+
+.telegram-dumps-recent {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+
+.telegram-dumps-recent-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.telegram-dumps-file-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.telegram-dumps-file-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--bg-subtle);
+  border-radius: 4px;
+  font-size: 0.7rem;
+}
+
+.telegram-dumps-file-date {
+  color: var(--text-muted);
+}
+
+.telegram-dumps-file-size {
+  color: var(--text);
+  flex: 1;
+}
+
+/* ── Heartbeat Health ── */
+.heartbeat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.heartbeat-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.heartbeat-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.heartbeat-value {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.heartbeat-model {
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--emerald);
+  background: var(--emerald-dim);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.heartbeat-history {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+
+.heartbeat-history-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.heartbeat-history-bar {
+  display: flex;
+  gap: 1px;
+  height: 20px;
+  background: var(--bg-subtle);
+  border-radius: 4px;
+  padding: 2px;
+  overflow: hidden;
+}
+
+.heartbeat-tick {
+  flex: 1;
+  min-width: 3px;
+  border-radius: 2px;
+  transition: opacity 0.15s;
+}
+
+.heartbeat-tick:hover {
+  opacity: 0.8;
+}
+
+.heartbeat-tick--ok {
+  background: var(--emerald);
+}
+
+.heartbeat-tick--fail {
+  background: var(--card-border);
+}
+
+.heartbeat-history-summary {
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+/* ── Memory System ── */
+.memory-system-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.memory-system-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius);
+}
+
+.memory-system-item-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.memory-system-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.memory-system-item-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.memory-system-item-stat {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.memory-system-item-stat--missing {
+  color: var(--amber);
+  font-weight: 500;
+}
+
+.memory-system-item-meta {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* ── Context Usage ── */
+.context-usage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.context-usage-bar-container {
+  padding: 4px 0;
+}
+
+.context-usage-bar-bg {
+  height: 12px;
+  background: var(--bg-subtle);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.context-usage-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.context-usage-bar-label {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.context-usage-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.context-usage-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.context-usage-stat:last-child {
+  border-bottom: none;
+}
+
+.context-usage-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.context-usage-stat-value {
+  font-size: 0.8rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.memory-flush-enabled {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--emerald);
+}
+
+.memory-flush-configured {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-left: 4px;
+}
+
+.memory-flush-disabled {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--red);
+}
+
+/* ── Grid adjustments for new cards ── */
+@media (min-width: 1200px) {
+  .system-status__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .system-status__card--telegram,
+  .system-status__card--heartbeat {
+    grid-column: span 1;
+  }
+  
+  .system-status__card--memory-system {
+    grid-column: span 2;
+  }
+  
+  .system-status__card--context {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 1199px) {
+  .memory-system-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .telegram-dumps-file-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .heartbeat-history-bar {
+    height: 16px;
+  }
+  
+  .heartbeat-tick {
+    min-width: 2px;
+  }
+}

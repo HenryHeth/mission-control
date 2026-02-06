@@ -69,3 +69,47 @@ At ~9 PM: Review new4henry queue. Message Paul on Telegram if any tasks need cla
 - Do I know who Paul is? ✓
 - Do I know about the henry-dashboard project? ✓
 - Do I remember how to access Gmail (gog + keyring password)? ✓
+
+---
+
+## 🏥 Heartbeat Health Monitor
+
+A separate monitoring system alerts Paul on Telegram if heartbeats fail.
+
+**Script:** `scripts/heartbeat-monitor.js`
+
+**What it does:**
+- Parses gateway.log for `[heartbeat] started` entries
+- Alerts if no heartbeat for >40 minutes during active hours (07:00-00:00)
+- Sends Telegram alert with diagnostic info
+- Has 60-minute alert cooldown to prevent spam
+
+**Commands:**
+```bash
+# Check current status
+node scripts/heartbeat-monitor.js --status
+
+# Run single check (for cron/testing)
+node scripts/heartbeat-monitor.js
+
+# Send test alert
+node scripts/heartbeat-monitor.js --test-alert
+
+# Run as daemon (checks every 10 min)
+node scripts/heartbeat-monitor.js --daemon
+```
+
+**Installation (launchd - macOS):**
+```bash
+# Copy plist to LaunchAgents
+cp scripts/com.clawdbot.heartbeat-monitor.plist ~/Library/LaunchAgents/
+
+# Load it
+launchctl load ~/Library/LaunchAgents/com.clawdbot.heartbeat-monitor.plist
+
+# Check status
+launchctl list | grep heartbeat
+```
+
+**State file:** `~/.clawdbot/logs/heartbeat-monitor-state.json`
+**Logs:** `~/.clawdbot/logs/heartbeat-monitor.log`

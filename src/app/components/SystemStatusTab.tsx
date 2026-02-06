@@ -4,13 +4,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { 
   Activity, Server, Phone, Clock, CheckCircle2, 
   XCircle, AlertTriangle, RefreshCw, Cpu, Zap,
-  Calendar, Terminal, User, Timer, FileText
+  Calendar, Terminal, User, Timer, FileText,
+  MessageSquare, Heart, Database, Brain, FolderOpen,
+  Mic, ExternalLink
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInSeconds, differenceInMinutes, differenceInHours } from 'date-fns';
 
 /* ═══════════════════════════════════════════════════════
-   Mission Control — System Status Tab v1.5
-   Services, Voice server, Cron jobs, Sub-agent Timeline
+   Mission Control — System Status Tab v2.0
+   Services, Voice, Cron, Sub-agents, Telegram Dumps, 
+   Heartbeat Health, Memory System, Context Usage
    ═══════════════════════════════════════════════════════ */
 
 interface ServiceStatus {
@@ -50,7 +53,67 @@ interface SubAgent {
   tokensUsed?: number;
 }
 
-type StatusType = 'online' | 'offline' | 'degraded' | 'unknown' | 'success' | 'failed' | 'pending' | 'running' | 'completed';
+interface TelegramDump {
+  filename: string;
+  date: string;
+  size: number;
+  lastModified: string;
+  lines?: number;
+}
+
+interface TelegramDumpsInfo {
+  lastDump: TelegramDump | null;
+  files: TelegramDump[];
+  totalSize: number;
+  missingDays: string[];
+}
+
+interface HeartbeatConfig {
+  every: string;
+  activeHours: { start: string; end: string };
+  model: string;
+  target: string;
+}
+
+interface HeartbeatHealthInfo {
+  config: HeartbeatConfig | null;
+  lastHeartbeat: string | null;
+  status: 'healthy' | 'stale' | 'unknown';
+  history24h: { time: string; ok: boolean }[];
+}
+
+interface MemorySystemInfo {
+  memoryMd: {
+    size: number;
+    lastModified: string;
+  } | null;
+  memoryFolder: {
+    totalSize: number;
+    fileCount: number;
+  };
+  telegramDumps: {
+    totalSize: number;
+    fileCount: number;
+  };
+  voiceCalls: {
+    totalSize: number;
+    fileCount: number;
+  };
+}
+
+interface ContextUsageInfo {
+  currentTokens: number;
+  maxTokens: number;
+  percentUsed: number;
+  compactionsToday: number;
+  lastCompaction: string | null;
+  memoryFlush: {
+    enabled: boolean;
+    prompt: string;
+  } | null;
+}
+
+type StatusType = 'online' | 'offline' | 'degraded' | 'unknown' | 'success' | 'failed' | 'pending' | 'running' | 'completed' | 'healthy' | 'stale';
 
 function StatusBadge({ status }: { status: StatusType }) {
   const colors: Record<string, { bg: string; color: string; label: string }> = {
@@ -63,6 +126,8 @@ function StatusBadge({ status }: { status: StatusType }) {
     pending: { bg: 'rgba(100,116,139,0.12)', color: '#64748B', label: 'Pending' },
     running: { bg: 'var(--sky-dim)', color: 'var(--sky)', label: 'Running' },
     completed: { bg: 'var(--emerald-dim)', color: 'var(--emerald)', label: 'Done' },
+    healthy: { bg: 'var(--emerald-dim)', color: 'var(--emerald)', label: 'Healthy' },
+    stale: { bg: 'var(--amber-dim)', color: 'var(--amber)', label: 'Stale' },
   };
   
   const c = colors[status] || colors.unknown;
@@ -75,6 +140,14 @@ function StatusBadge({ status }: { status: StatusType }) {
       {c.label}
     </span>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
 function ServiceCard({ service }: { service: ServiceStatus }) {
@@ -227,6 +300,320 @@ function SubAgentTimelineRow({ agent }: { agent: SubAgent }) {
   );
 }
 
+/* ═══════════════════════════════════════════════════════
+   NEW: Telegram Dumps Section
+   ═══════════════════════════════════════════════════════ */
+
+function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
+  return (
+    <div className="system-status__card system-status__card--telegram">
+      <div className="system-status__card-header">
+        <MessageSquare size={18} style={{ color: 'var(--sky)' }} />
+        <h2>Telegram Dumps</h2>
+      </div>
+      
+      <div className="telegram-dumps-info">
+        {data.lastDump ? (
+          <>
+            <div className="telegram-dumps-row">
+              <span className="telegram-dumps-label">Last Dump:</span>
+              <span className="telegram-dumps-value">
+                {format(new Date(data.lastDump.lastModified), 'MMM d, h:mm a')}
+                <span className="telegram-dumps-meta">
+                  ({formatDistanceToNow(new Date(data.lastDump.lastModified), { addSuffix: true })})
+                </span>
+              </span>
+            </div>
+            <div className="telegram-dumps-row">
+              <span className="telegram-dumps-label">File Size:</span>
+              <span className="telegram-dumps-value">
+                {formatBytes(data.lastDump.size)}
+                {data.lastDump.lines && (
+                  <span className="telegram-dumps-meta">({data.lastDump.lines} lines)</span>
+                )}
+              </span>
+            </div>
+            <div className="telegram-dumps-row">
+              <span className="telegram-dumps-label">Location:</span>
+              <span className="telegram-dumps-value telegram-dumps-path">
+                memory/telegram/{data.lastDump.filename}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="telegram-dumps-empty">
+            <AlertTriangle size={16} style={{ color: 'var(--amber)' }} />
+            <span>No Telegram dumps found</span>
+          </div>
+        )}
+        
+        {data.missingDays.length > 0 && (
+          <div className="telegram-dumps-missing">
+            <AlertTriangle size={14} style={{ color: 'var(--amber)' }} />
+            <span>Missing: {data.missingDays.map(d => format(new Date(d), 'MMM d')).join(', ')}</span>
+          </div>
+        )}
+        
+        <div className="telegram-dumps-recent">
+          <div className="telegram-dumps-recent-label">Recent Files:</div>
+          <div className="telegram-dumps-file-grid">
+            {data.files.slice(0, 6).map(file => (
+              <div 
+                key={file.filename}
+                className="telegram-dumps-file-item"
+                title={`${file.filename} - ${formatBytes(file.size)}`}
+              >
+                <span className="telegram-dumps-file-date">
+                  {format(new Date(file.date), 'MMM d')}:
+                </span>
+                <span className="telegram-dumps-file-size">
+                  {formatBytes(file.size)}
+                </span>
+                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   NEW: Heartbeat Health Section
+   ═══════════════════════════════════════════════════════ */
+
+function HeartbeatHealthCard({ data }: { data: HeartbeatHealthInfo }) {
+  // Count successful heartbeats in last 24h
+  const successCount = data.history24h.filter(h => h.ok).length;
+  const totalCount = data.history24h.length;
+  
+  return (
+    <div className="system-status__card system-status__card--heartbeat">
+      <div className="system-status__card-header">
+        <Heart size={18} style={{ color: data.status === 'healthy' ? 'var(--emerald)' : 'var(--amber)' }} />
+        <h2>Heartbeat Health</h2>
+        <StatusBadge status={data.status} />
+      </div>
+      
+      <div className="heartbeat-info">
+        <div className="heartbeat-row">
+          <span className="heartbeat-label">Last Heartbeat:</span>
+          <span className="heartbeat-value">
+            {data.lastHeartbeat 
+              ? formatDistanceToNow(new Date(data.lastHeartbeat), { addSuffix: true })
+              : 'Unknown'}
+          </span>
+        </div>
+        
+        {data.config && (
+          <>
+            <div className="heartbeat-row">
+              <span className="heartbeat-label">Model:</span>
+              <span className="heartbeat-value heartbeat-model">
+                {data.config.model.split('/').pop() || data.config.model}
+              </span>
+            </div>
+            <div className="heartbeat-row">
+              <span className="heartbeat-label">Interval:</span>
+              <span className="heartbeat-value">{data.config.every}</span>
+            </div>
+            <div className="heartbeat-row">
+              <span className="heartbeat-label">Active Hours:</span>
+              <span className="heartbeat-value">
+                {data.config.activeHours.start} - {data.config.activeHours.end} PST
+              </span>
+            </div>
+          </>
+        )}
+        
+        <div className="heartbeat-history">
+          <div className="heartbeat-history-label">24h History:</div>
+          <div className="heartbeat-history-bar">
+            {data.history24h.slice(0, 48).reverse().map((h, i) => (
+              <div 
+                key={i}
+                className={`heartbeat-tick ${h.ok ? 'heartbeat-tick--ok' : 'heartbeat-tick--fail'}`}
+                title={`${format(new Date(h.time), 'h:mm a')}: ${h.ok ? '✓' : '✗'}`}
+              />
+            ))}
+          </div>
+          <div className="heartbeat-history-summary">
+            {successCount}/{totalCount} ✓
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Memory Flow Diagram Section
+   Visual cascade of memory hierarchy
+   ═══════════════════════════════════════════════════════ */
+
+function MemorySystemCard({ data }: { data: MemorySystemInfo }) {
+  return (
+    <div className="system-status__card system-status__card--memory-system">
+      <div className="system-status__card-header">
+        <Database size={18} style={{ color: 'var(--amber)' }} />
+        <h2>Memory Flow</h2>
+      </div>
+      
+      <div className="memory-flow-diagram">
+        {/* Level 1: MEMORY.md */}
+        <div className="memory-flow-level memory-flow-level--primary">
+          <div className="memory-flow-icon">
+            <FileText size={18} style={{ color: 'var(--sky)' }} />
+          </div>
+          <div className="memory-flow-info">
+            <div className="memory-flow-name">MEMORY.md</div>
+            <div className="memory-flow-stats">
+              {data.memoryMd ? (
+                <>
+                  <span className="memory-flow-size">{formatBytes(data.memoryMd.size)}</span>
+                  <span className="memory-flow-time">
+                    {formatDistanceToNow(new Date(data.memoryMd.lastModified), { addSuffix: true })}
+                  </span>
+                </>
+              ) : (
+                <span className="memory-flow-missing">Not found</span>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="memory-flow-arrow">↓</div>
+        
+        {/* Level 2: memory/*.md */}
+        <div className="memory-flow-level">
+          <div className="memory-flow-icon">
+            <FolderOpen size={18} style={{ color: 'var(--emerald)' }} />
+          </div>
+          <div className="memory-flow-info">
+            <div className="memory-flow-name">memory/*.md</div>
+            <div className="memory-flow-stats">
+              <span className="memory-flow-count">{data.memoryFolder.fileCount} files</span>
+              <span className="memory-flow-size">{formatBytes(data.memoryFolder.totalSize)}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="memory-flow-arrow">↓</div>
+        
+        {/* Level 3: telegram/*.md */}
+        <div className="memory-flow-level">
+          <div className="memory-flow-icon">
+            <MessageSquare size={18} style={{ color: 'var(--sky)' }} />
+          </div>
+          <div className="memory-flow-info">
+            <div className="memory-flow-name">telegram/*.md</div>
+            <div className="memory-flow-stats">
+              <span className="memory-flow-count">{data.telegramDumps.fileCount} files</span>
+              <span className="memory-flow-size">{formatBytes(data.telegramDumps.totalSize)}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="memory-flow-arrow">↓</div>
+        
+        {/* Level 4: voice-calls/*.txt */}
+        <div className="memory-flow-level">
+          <div className="memory-flow-icon">
+            <Mic size={18} style={{ color: 'var(--amber)' }} />
+          </div>
+          <div className="memory-flow-info">
+            <div className="memory-flow-name">voice-calls/*.txt</div>
+            <div className="memory-flow-stats">
+              <span className="memory-flow-count">{data.voiceCalls.fileCount} files</span>
+              <span className="memory-flow-size">{formatBytes(data.voiceCalls.totalSize)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   NEW: Context Usage Section
+   ═══════════════════════════════════════════════════════ */
+
+function ContextUsageCard({ data }: { data: ContextUsageInfo }) {
+  const barColor = data.percentUsed > 80 
+    ? 'var(--red)' 
+    : data.percentUsed > 50 
+      ? 'var(--amber)' 
+      : 'var(--emerald)';
+      
+  return (
+    <div className="system-status__card system-status__card--context">
+      <div className="system-status__card-header">
+        <Brain size={18} style={{ color: 'var(--sky)' }} />
+        <h2>Context Usage</h2>
+      </div>
+      
+      <div className="context-usage-info">
+        <div className="context-usage-bar-container">
+          <div className="context-usage-bar-bg">
+            <div 
+              className="context-usage-bar-fill"
+              style={{ 
+                width: `${Math.min(data.percentUsed, 100)}%`,
+                backgroundColor: barColor 
+              }}
+            />
+          </div>
+          <div className="context-usage-bar-label">
+            <span>{data.currentTokens.toLocaleString()} / {data.maxTokens.toLocaleString()} tokens</span>
+            <span style={{ color: barColor }}>{data.percentUsed.toFixed(1)}%</span>
+          </div>
+        </div>
+        
+        <div className="context-usage-stats">
+          <div className="context-usage-stat">
+            <span className="context-usage-stat-label">Compactions today:</span>
+            <span className="context-usage-stat-value">{data.compactionsToday}</span>
+          </div>
+          
+          {data.lastCompaction && (
+            <div className="context-usage-stat">
+              <span className="context-usage-stat-label">Last compaction:</span>
+              <span className="context-usage-stat-value">
+                {formatDistanceToNow(new Date(data.lastCompaction), { addSuffix: true })}
+              </span>
+            </div>
+          )}
+          
+          <div className="context-usage-stat">
+            <span className="context-usage-stat-label">memoryFlush:</span>
+            <span className="context-usage-stat-value">
+              {data.memoryFlush?.enabled ? (
+                <span className="memory-flush-enabled">
+                  <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
+                  Enabled
+                  {data.memoryFlush.prompt && (
+                    <span className="memory-flush-configured">(prompt configured)</span>
+                  )}
+                </span>
+              ) : (
+                <span className="memory-flush-disabled">
+                  <XCircle size={12} style={{ color: 'var(--red)' }} />
+                  Disabled
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Main Component
+   ═══════════════════════════════════════════════════════ */
+
 export default function SystemStatusTab() {
   const [loading, setLoading] = useState(true);
   const [services, setServices] = useState<ServiceStatus[]>([]);
@@ -238,6 +625,12 @@ export default function SystemStatusTab() {
   const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
   const [subAgents, setSubAgents] = useState<SubAgent[]>([]);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  
+  // New state for enhanced sections
+  const [telegramDumps, setTelegramDumps] = useState<TelegramDumpsInfo | null>(null);
+  const [heartbeatHealth, setHeartbeatHealth] = useState<HeartbeatHealthInfo | null>(null);
+  const [memorySystem, setMemorySystem] = useState<MemorySystemInfo | null>(null);
+  const [contextUsage, setContextUsage] = useState<ContextUsageInfo | null>(null);
 
   const generateSampleData = useCallback(() => {
     // Sample services
@@ -310,13 +703,13 @@ export default function SystemStatusTab() {
       }
     ]);
 
-    // Sample sub-agents with realistic data
+    // Sample sub-agents
     setSubAgents([
       {
         id: 'overnight-mc-dashboard',
         label: 'overnight-mc-dashboard-merge',
         status: 'running',
-        startTime: new Date(Date.now() - 180000), // 3 min ago
+        startTime: new Date(Date.now() - 180000),
         task: 'Mission Control v1.5 dashboard merging',
         model: 'claude-opus-4-5',
         tokensUsed: 45000
@@ -325,7 +718,7 @@ export default function SystemStatusTab() {
         id: 'research-travel',
         label: 'research-travel-apis',
         status: 'completed',
-        startTime: new Date(Date.now() - 2 * 3600000), // 2 hours ago
+        startTime: new Date(Date.now() - 2 * 3600000),
         endTime: new Date(Date.now() - 1.5 * 3600000),
         task: 'Research flight booking APIs for trip planning',
         model: 'claude-sonnet-4',
@@ -340,35 +733,135 @@ export default function SystemStatusTab() {
         task: 'Sync Google Calendar events',
         model: 'gemini-2.5-flash-lite',
         tokensUsed: 3500
-      },
-      {
-        id: 'email-draft',
-        label: 'email-draft-writer',
-        status: 'completed',
-        startTime: new Date(Date.now() - 6 * 3600000),
-        endTime: new Date(Date.now() - 5.8 * 3600000),
-        task: 'Draft follow-up emails for meetings',
-        model: 'claude-sonnet-4',
-        tokensUsed: 12000
-      },
-      {
-        id: 'doc-research',
-        label: 'doc-research-agent',
-        status: 'failed',
-        startTime: new Date(Date.now() - 8 * 3600000),
-        endTime: new Date(Date.now() - 7.9 * 3600000),
-        task: 'Research legal documents (timeout)',
-        model: 'claude-opus-4-5',
-        tokensUsed: 5000
       }
     ]);
+
+    // Sample Telegram Dumps data
+    const today = new Date();
+    const twoDaysAgo = new Date(today.getTime() - 2 * 24 * 3600000);
+    const threeDaysAgo = new Date(today.getTime() - 3 * 24 * 3600000);
+    const fourDaysAgo = new Date(today.getTime() - 4 * 24 * 3600000);
+    
+    setTelegramDumps({
+      lastDump: {
+        filename: format(today, 'yyyy-MM-dd') + '.md',
+        date: format(today, 'yyyy-MM-dd'),
+        size: 3584,
+        lastModified: new Date(today.getTime() - 12 * 60000).toISOString(),
+        lines: 70
+      },
+      files: [
+        {
+          filename: format(today, 'yyyy-MM-dd') + '.md',
+          date: format(today, 'yyyy-MM-dd'),
+          size: 3584,
+          lastModified: new Date(today.getTime() - 12 * 60000).toISOString(),
+          lines: 70
+        },
+        {
+          filename: format(twoDaysAgo, 'yyyy-MM-dd') + '.md',
+          date: format(twoDaysAgo, 'yyyy-MM-dd'),
+          size: 23552,
+          lastModified: twoDaysAgo.toISOString(),
+          lines: 420
+        },
+        {
+          filename: format(threeDaysAgo, 'yyyy-MM-dd') + '.md',
+          date: format(threeDaysAgo, 'yyyy-MM-dd'),
+          size: 8499,
+          lastModified: threeDaysAgo.toISOString(),
+          lines: 156
+        },
+        {
+          filename: format(fourDaysAgo, 'yyyy-MM-dd') + '.md',
+          date: format(fourDaysAgo, 'yyyy-MM-dd'),
+          size: 12288,
+          lastModified: fourDaysAgo.toISOString(),
+          lines: 234
+        }
+      ],
+      totalSize: 47923,
+      missingDays: [format(new Date(today.getTime() - 1 * 24 * 3600000), 'yyyy-MM-dd')]
+    });
+
+    // Sample Heartbeat Health data - generate 48 slots (24h * 2 per hour)
+    const heartbeatHistory: { time: string; ok: boolean }[] = [];
+    for (let i = 47; i >= 0; i--) {
+      const slotTime = new Date(now.getTime() - i * 30 * 60000);
+      // Active hours: 7am - midnight PST
+      const hour = slotTime.getHours();
+      const isActiveHour = hour >= 7 && hour < 24;
+      heartbeatHistory.push({
+        time: slotTime.toISOString(),
+        ok: isActiveHour ? Math.random() > 0.02 : true // 98% success rate during active hours
+      });
+    }
+    
+    setHeartbeatHealth({
+      config: {
+        every: '30m',
+        activeHours: { start: '07:00', end: '00:00' },
+        model: 'google/gemini-2.5-flash-lite-preview-06-17',
+        target: 'telegram'
+      },
+      lastHeartbeat: new Date(now.getTime() - 33 * 60000).toISOString(),
+      status: 'healthy',
+      history24h: heartbeatHistory
+    });
+
+    // Sample Memory System data
+    setMemorySystem({
+      memoryMd: {
+        size: 23552,
+        lastModified: new Date(now.getTime() - 2 * 3600000).toISOString()
+      },
+      memoryFolder: {
+        totalSize: 1258291,
+        fileCount: 58
+      },
+      telegramDumps: {
+        totalSize: 35840,
+        fileCount: 4
+      },
+      voiceCalls: {
+        totalSize: 911360,
+        fileCount: 85
+      }
+    });
+
+    // Sample Context Usage data
+    setContextUsage({
+      currentTokens: 45000,
+      maxTokens: 200000,
+      percentUsed: 22.5,
+      compactionsToday: 1,
+      lastCompaction: new Date(now.getTime() - 100 * 60000).toISOString(),
+      memoryFlush: {
+        enabled: true,
+        prompt: 'Flush important context to memory files'
+      }
+    });
 
     setLoading(false);
     setLastRefresh(new Date());
   }, []);
 
+  const fetchSystemStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/system-status');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.telegram) setTelegramDumps(data.telegram);
+        if (data.heartbeat) setHeartbeatHealth(data.heartbeat);
+        if (data.memory) setMemorySystem(data.memory);
+        if (data.context) setContextUsage(data.context);
+      }
+    } catch (e) {
+      console.error('Failed to fetch system status:', e);
+    }
+  }, []);
+
   const checkLiveServices = useCallback(async () => {
-    // Service endpoints to check - using various fallback URLs
     const serviceChecks = [
       { 
         name: 'Clawdbot Gateway', 
@@ -396,24 +889,20 @@ export default function SystemStatusTab() {
 
     for (const svc of serviceChecks) {
       let isOnline = false;
-      let statusDetails = svc.details;
+      const statusDetails = svc.details;
       
-      // Try each URL until one works
       for (const url of svc.urls) {
         try {
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 2000);
-          const res = await fetch(url, { 
+          await fetch(url, { 
             signal: controller.signal,
-            mode: 'no-cors' // Allow cross-origin requests
+            mode: 'no-cors'
           });
           clearTimeout(timeout);
-          
-          // With no-cors, we can't read the response but if we get here, the server responded
           isOnline = true;
           break;
         } catch {
-          // Try next URL
           continue;
         }
       }
@@ -428,7 +917,6 @@ export default function SystemStatusTab() {
 
     setServices(results);
     
-    // Update voice metrics if voice server is online
     const voiceOnline = results.find(s => s.name === 'Voice Server')?.status === 'online';
     setVoiceMetrics(prev => ({
       ...prev,
@@ -439,18 +927,20 @@ export default function SystemStatusTab() {
   useEffect(() => {
     generateSampleData();
     checkLiveServices();
+    fetchSystemStatus();
     
     const interval = setInterval(() => {
       checkLiveServices();
+      fetchSystemStatus();
       setLastRefresh(new Date());
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [generateSampleData, checkLiveServices]);
+  }, [generateSampleData, checkLiveServices, fetchSystemStatus]);
 
   const handleRefresh = () => {
     setLoading(true);
-    checkLiveServices().then(() => {
+    Promise.all([checkLiveServices(), fetchSystemStatus()]).then(() => {
       setLoading(false);
       setLastRefresh(new Date());
     });
@@ -513,6 +1003,18 @@ export default function SystemStatusTab() {
           <VoiceServerCard metrics={voiceMetrics} />
         </div>
 
+        {/* Telegram Dumps */}
+        {telegramDumps && <TelegramDumpsCard data={telegramDumps} />}
+
+        {/* Heartbeat Health */}
+        {heartbeatHealth && <HeartbeatHealthCard data={heartbeatHealth} />}
+
+        {/* Memory System (Flow Diagram) */}
+        {memorySystem && <MemorySystemCard data={memorySystem} />}
+
+        {/* Context Usage (Compaction Countdown) */}
+        {contextUsage && <ContextUsageCard data={contextUsage} />}
+
         {/* Cron Jobs */}
         <div className="system-status__card system-status__card--cron">
           <div className="system-status__card-header">
@@ -536,7 +1038,6 @@ export default function SystemStatusTab() {
             </span>
           </div>
           
-          {/* Timeline Table Header */}
           <div className="agent-timeline-header">
             <div className="agent-timeline-header__col agent-timeline-header__col--status">Status</div>
             <div className="agent-timeline-header__col agent-timeline-header__col--name">Agent Name</div>
@@ -545,7 +1046,6 @@ export default function SystemStatusTab() {
             <div className="agent-timeline-header__col agent-timeline-header__col--duration">Duration</div>
           </div>
           
-          {/* Timeline Rows */}
           <div className="agent-timeline-list">
             {subAgents.length === 0 ? (
               <div className="empty-state">No sub-agents active today</div>
@@ -556,7 +1056,6 @@ export default function SystemStatusTab() {
             )}
           </div>
           
-          {/* Capacity Summary */}
           <div className="agent-timeline-summary">
             <div className="agent-timeline-summary__item">
               <User size={14} />
