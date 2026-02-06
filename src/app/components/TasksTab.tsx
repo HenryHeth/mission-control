@@ -2,29 +2,33 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import {
-  ComposedChart, BarChart, AreaChart,
-  Bar, Area, Line,
+  ComposedChart, BarChart, AreaChart, PieChart,
+  Bar, Area, Line, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import {
   Zap, CheckCircle2, TrendingUp, Clock, ListChecks,
-  BarChart3, FolderOpen, RefreshCw, AlertCircle
+  BarChart3, FolderOpen, RefreshCw, AlertCircle, Calendar
 } from 'lucide-react';
-import { format, subDays, formatDistanceToNow } from 'date-fns';
+import { format, subDays, formatDistanceToNow, startOfYear, endOfYear, isWithinInterval, fromUnixTime } from 'date-fns';
 
 /* ═══════════════════════════════════════════════════════
-   Mission Control — Tasks Tab
-   Velocity, Recent Closes, New vs Retired, Backlog Trend
+   Mission Control — Tasks Tab v1.5
+   LIVE: Velocity, Recent Closes, Due Today
+   HISTORIC: Yearly trends, Folder breakdown, Productivity
    ═══════════════════════════════════════════════════════ */
 
 const LIVE_API_URL = process.env.NEXT_PUBLIC_LIVE_API_URL || 'http://localhost:3456';
+
+const COLORS = ['#10B981', '#38BDF8', '#FBBF24', '#F87171', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
 
 interface Task {
   id: number;
   title: string;
   folder: string;
-  completed: number; // Unix timestamp (0 if not completed)
-  added: number; // Unix timestamp
+  folderId?: number;
+  completed: number;
+  added: number;
   priority: number;
   duedate?: number;
 }
@@ -35,24 +39,35 @@ interface TaskData {
   totalOpen: number;
   totalCompleted: number;
   generatedAt: string;
+  folders?: { id: number; name: string }[];
 }
 
-// Sample data for demo (will be replaced by API)
+// Sample data for demo
 function generateSampleData(): TaskData {
   const now = Math.floor(Date.now() / 1000);
   const completed: Task[] = [];
   const open: Task[] = [];
   
-  // Generate 60 days of completed tasks
-  for (let i = 0; i < 150; i++) {
-    const daysAgo = Math.floor(Math.random() * 60);
+  const folders = [
+    { id: 1, name: 'pWorkflow' },
+    { id: 2, name: 'pHome' },
+    { id: 3, name: 'pFinancial' },
+    { id: 4, name: 'pPhysical' },
+    { id: 5, name: 'Inbox' },
+  ];
+  
+  // Generate 365 days of completed tasks for yearly view
+  for (let i = 0; i < 500; i++) {
+    const daysAgo = Math.floor(Math.random() * 365);
     const completedTs = now - daysAgo * 86400 - Math.floor(Math.random() * 43200);
     const addedTs = completedTs - Math.floor(Math.random() * 7 * 86400);
+    const folder = folders[Math.floor(Math.random() * folders.length)];
     
     completed.push({
       id: i + 1,
       title: SAMPLE_TASK_TITLES[i % SAMPLE_TASK_TITLES.length],
-      folder: SAMPLE_FOLDERS[Math.floor(Math.random() * SAMPLE_FOLDERS.length)],
+      folder: folder.name,
+      folderId: folder.id,
       completed: completedTs,
       added: addedTs,
       priority: Math.floor(Math.random() * 3) + 1,
@@ -63,11 +78,13 @@ function generateSampleData(): TaskData {
   for (let i = 0; i < 45; i++) {
     const addedDaysAgo = Math.floor(Math.random() * 30);
     const addedTs = now - addedDaysAgo * 86400;
+    const folder = folders[Math.floor(Math.random() * folders.length)];
     
     open.push({
       id: 1000 + i,
       title: SAMPLE_TASK_TITLES[(i + 50) % SAMPLE_TASK_TITLES.length],
-      folder: SAMPLE_FOLDERS[Math.floor(Math.random() * SAMPLE_FOLDERS.length)],
+      folder: folder.name,
+      folderId: folder.id,
       completed: 0,
       added: addedTs,
       priority: Math.floor(Math.random() * 3) + 1,
@@ -81,11 +98,12 @@ function generateSampleData(): TaskData {
     totalOpen: open.length,
     totalCompleted: completed.length,
     generatedAt: new Date().toISOString(),
+    folders,
   };
 }
 
 const SAMPLE_TASK_TITLES = [
-  'Build Mission Control v1',
+  'Build Mission Control v1.5',
   'Review sprint planning docs',
   'Research VVO frameworks',
   'Morning briefing automation',
@@ -111,8 +129,6 @@ const SAMPLE_TASK_TITLES = [
   'Create memory browser',
   'Design system status page',
 ];
-
-const SAMPLE_FOLDERS = ['pWorkflow', 'pHome', 'pFinancial', 'pPhysical', 'Inbox'];
 
 function DarkTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number }>; label?: string }) {
   if (!active || !payload?.length) return null;
@@ -154,9 +170,9 @@ export default function TasksTab() {
   const [data, setData] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [dataSource, setDataSource] = useState<'live' | 'sample'>('sample');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
-    // Try live API first
     const fetchData = async () => {
       try {
         const controller = new AbortController();
@@ -177,7 +193,6 @@ export default function TasksTab() {
         // Fall through to sample data
       }
       
-      // Use sample data
       setData(generateSampleData());
       setDataSource('sample');
       setLoading(false);
@@ -185,6 +200,10 @@ export default function TasksTab() {
     
     fetchData();
   }, []);
+
+  /* ═══════════════════════════════════════════════════════
+     LIVE DATA COMPUTATIONS
+     ═══════════════════════════════════════════════════════ */
 
   /* ── Task Velocity: daily completions + 7-day moving average ── */
   const velocityData = useMemo(() => {
@@ -202,7 +221,6 @@ export default function TasksTab() {
       days.push({ date: dayStr, label: format(day, 'M/d'), count });
     }
 
-    // 7-day moving average
     return days.map((d, i) => {
       const start = Math.max(0, i - 6);
       const windowSlice = days.slice(start, i + 1);
@@ -211,7 +229,7 @@ export default function TasksTab() {
     });
   }, [data]);
 
-  /* ── Recent Closes: last 20 completed tasks ── */
+  /* ── Recent Closes: last 15 completed tasks ── */
   const recentCloses = useMemo(() => {
     if (!data) return [];
     return [...data.completed]
@@ -251,7 +269,6 @@ export default function TasksTab() {
     const allTasks = [...data.completed, ...data.open];
     const sixtyDaysAgoTs = Math.floor(Date.now() / 1000) - 60 * 86400;
 
-    // Estimate starting open count (60 days ago)
     const createdInPeriod = allTasks.filter(t => t.added >= sixtyDaysAgoTs).length;
     const completedInPeriod = data.completed.length;
     let runningOpen = data.totalOpen - createdInPeriod + completedInPeriod;
@@ -276,23 +293,83 @@ export default function TasksTab() {
     return points;
   }, [data]);
 
+  /* ═══════════════════════════════════════════════════════
+     HISTORIC DATA COMPUTATIONS (Year-based)
+     ═══════════════════════════════════════════════════════ */
+
+  /* ── Filter tasks by selected year ── */
+  const yearlyTasks = useMemo(() => {
+    if (!data) return [];
+    const start = startOfYear(new Date(selectedYear, 0, 1));
+    const end = endOfYear(new Date(selectedYear, 0, 1));
+    return data.completed.filter(t => {
+      if (t.completed > 0) {
+        return isWithinInterval(fromUnixTime(t.completed), { start, end });
+      }
+      return false;
+    });
+  }, [data, selectedYear]);
+
+  /* ── Folder breakdown ── */
+  const folderData = useMemo(() => {
+    if (!yearlyTasks.length) return [];
+    const folderCounts: Record<string, number> = {};
+    yearlyTasks.forEach(t => {
+      const folder = t.folder || 'Unfiled';
+      folderCounts[folder] = (folderCounts[folder] || 0) + 1;
+    });
+    return Object.entries(folderCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [yearlyTasks]);
+
+  /* ── Monthly productivity trend ── */
+  const monthlyData = useMemo(() => {
+    if (!yearlyTasks.length) return [];
+    const monthCounts: Record<string, number> = {};
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Initialize all months
+    months.forEach(m => { monthCounts[m] = 0; });
+    
+    yearlyTasks.forEach(t => {
+      const month = format(fromUnixTime(t.completed), 'MMM');
+      monthCounts[month] = (monthCounts[month] || 0) + 1;
+    });
+    
+    return months.map(name => ({ name, count: monthCounts[name] || 0 }));
+  }, [yearlyTasks]);
+
   /* ── Summary stats ── */
   const stats = useMemo(() => {
-    if (!data) return { open: 0, closedWeek: 0, avgPerDay: '0', overdue: 0 };
+    if (!data) return { open: 0, closedWeek: 0, avgPerDay: '0', overdue: 0, dueToday: 0 };
     const nowTs = Math.floor(Date.now() / 1000);
     const weekAgoTs = nowTs - 7 * 86400;
+    const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+    const todayEnd = todayStart + 86400;
+    
     const closedThisWeek = data.completed.filter(t => t.completed >= weekAgoTs).length;
     const daysInData = 60;
     const avgPerDay = (data.totalCompleted / daysInData).toFixed(1);
     const overdue = data.open.filter(t => t.duedate && t.duedate < nowTs).length;
+    const dueToday = data.open.filter(t => t.duedate && t.duedate >= todayStart && t.duedate < todayEnd).length;
 
     return {
       open: data.totalOpen,
       closedWeek: closedThisWeek,
       avgPerDay,
       overdue,
+      dueToday,
     };
   }, [data]);
+
+  /* ── Yearly stats ── */
+  const yearlyStats = useMemo(() => {
+    const total = yearlyTasks.length;
+    const avgDaily = (total / 365).toFixed(1);
+    return { total, avgDaily, folders: folderData.length };
+  }, [yearlyTasks, folderData]);
 
   if (loading) {
     return (
@@ -317,7 +394,9 @@ export default function TasksTab() {
 
   return (
     <div className="tasks-dashboard">
-      {/* Header */}
+      {/* ═══════════════════════════════════════════════════════
+         HEADER
+         ═══════════════════════════════════════════════════════ */}
       <div className="tasks-header">
         <div className="tasks-header__left">
           <CheckCircle2 size={24} style={{ color: 'var(--emerald)' }} />
@@ -334,7 +413,9 @@ export default function TasksTab() {
         </div>
       </div>
 
-      {/* Stats Bar */}
+      {/* ═══════════════════════════════════════════════════════
+         LIVE SECTION: Stats Bar
+         ═══════════════════════════════════════════════════════ */}
       <div className="stats-bar">
         <StatPill
           icon={<FolderOpen size={18} />}
@@ -357,6 +438,15 @@ export default function TasksTab() {
           color="var(--sky)"
           bgColor="var(--sky-dim)"
         />
+        {stats.dueToday > 0 && (
+          <StatPill
+            icon={<Clock size={18} />}
+            value={stats.dueToday}
+            label="Due Today"
+            color="var(--amber)"
+            bgColor="var(--amber-dim)"
+          />
+        )}
         {stats.overdue > 0 && (
           <StatPill
             icon={<AlertCircle size={18} />}
@@ -368,7 +458,9 @@ export default function TasksTab() {
         )}
       </div>
 
-      {/* Bento Grid */}
+      {/* ═══════════════════════════════════════════════════════
+         LIVE SECTION: Bento Grid
+         ═══════════════════════════════════════════════════════ */}
       <div className="bento-grid">
         {/* Task Velocity */}
         <div className="bento-card bento-card--velocity">
@@ -507,6 +599,130 @@ export default function TasksTab() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+         HISTORIC SECTION DIVIDER
+         ═══════════════════════════════════════════════════════ */}
+      <div className="section-divider">
+        <div className="section-divider__line" />
+        <span className="section-divider__text">
+          <Calendar size={14} style={{ marginRight: 6 }} />
+          Historic Trends
+        </span>
+        <div className="section-divider__line" />
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+         HISTORIC SECTION: Year Selector & Stats
+         ═══════════════════════════════════════════════════════ */}
+      <div className="historic-header">
+        <div className="historic-stats">
+          <div className="historic-stat">
+            <span className="historic-stat__value">{yearlyStats.total}</span>
+            <span className="historic-stat__label">Total Completed</span>
+          </div>
+          <div className="historic-stat">
+            <span className="historic-stat__value">{yearlyStats.avgDaily}</span>
+            <span className="historic-stat__label">Avg Per Day</span>
+          </div>
+          <div className="historic-stat">
+            <span className="historic-stat__value">{yearlyStats.folders}</span>
+            <span className="historic-stat__label">Active Folders</span>
+          </div>
+        </div>
+        <div className="year-selector">
+          {[2026, 2025, 2024].map(y => (
+            <button
+              key={y}
+              onClick={() => setSelectedYear(y)}
+              className={`year-btn ${selectedYear === y ? 'year-btn--active' : ''}`}
+            >
+              {y}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+         HISTORIC SECTION: Charts
+         ═══════════════════════════════════════════════════════ */}
+      <div className="bento-grid">
+        {/* Productivity Trend (Monthly) */}
+        <div className="bento-card bento-card--productivity">
+          <div className="bento-card__header">
+            <TrendingUp size={20} style={{ color: 'var(--emerald)' }} />
+            <h2>Productivity Trend</h2>
+            <span className="bento-card__subtitle">{selectedYear} · Monthly</span>
+          </div>
+          <div className="bento-card__chart">
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={monthlyData}>
+                <defs>
+                  <linearGradient id="productivityGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
+                  axisLine={false} tickLine={false}
+                />
+                <YAxis
+                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
+                  axisLine={false} tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip content={<DarkTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="count"
+                  stroke="var(--emerald)"
+                  strokeWidth={2.5}
+                  fill="url(#productivityGrad)"
+                  name="Completed"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Folder Breakdown */}
+        <div className="bento-card bento-card--folders">
+          <div className="bento-card__header">
+            <FolderOpen size={20} style={{ color: 'var(--sky)' }} />
+            <h2>Folder Breakdown</h2>
+            <span className="bento-card__subtitle">{selectedYear}</span>
+          </div>
+          <div className="folder-list">
+            {folderData.map((folder, i) => {
+              const percent = yearlyStats.total > 0 ? ((folder.count / yearlyStats.total) * 100).toFixed(0) : 0;
+              return (
+                <div key={folder.name} className="folder-item">
+                  <div className="folder-item__icon" style={{ backgroundColor: COLORS[i % COLORS.length] }}>
+                    {folder.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="folder-item__info">
+                    <span className="folder-item__name">{folder.name}</span>
+                    <span className="folder-item__count">{folder.count} tasks</span>
+                  </div>
+                  <div className="folder-item__bar">
+                    <div 
+                      className="folder-item__fill"
+                      style={{ 
+                        width: `${percent}%`,
+                        backgroundColor: COLORS[i % COLORS.length]
+                      }}
+                    />
+                  </div>
+                  <span className="folder-item__percent">{percent}%</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

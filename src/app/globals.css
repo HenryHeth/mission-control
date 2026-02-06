@@ -2163,3 +2163,334 @@ body {
   
   .voice-server-card__stats { flex-wrap: wrap; gap: 16px; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   Tasks Tab v1.5 — Historic Section
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Section Divider ── */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 32px 0 24px;
+}
+
+.section-divider__line {
+  flex: 1;
+  height: 1px;
+  background: var(--card-border);
+}
+
+.section-divider__text {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Historic Header ── */
+.historic-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.historic-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.historic-stat {
+  text-align: center;
+}
+
+.historic-stat__value {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.historic-stat__label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Year Selector ── */
+.year-selector {
+  display: flex;
+  gap: 6px;
+}
+
+.year-btn {
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.year-btn:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+
+.year-btn--active {
+  background: var(--emerald);
+  color: #fff;
+  border-color: var(--emerald);
+}
+
+/* ── Productivity Card ── */
+.bento-card--productivity { grid-column: span 7; }
+.bento-card--folders { grid-column: span 5; }
+
+/* ── Folder List ── */
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.folder-item__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.folder-item__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+}
+
+.folder-item__name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.folder-item__count {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+
+.folder-item__bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-subtle);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.folder-item__fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.folder-item__percent {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  width: 40px;
+  text-align: right;
+}
+
+/* ═══════════════════════════════════════════════════════
+   System Status Tab v1.5 — Sub-Agent Timeline
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Timeline Card ── */
+.system-status__card--timeline {
+  grid-column: span 12;
+}
+
+/* ── Timeline Header ── */
+.agent-timeline-header {
+  display: grid;
+  grid-template-columns: 80px 200px 1fr 100px 100px;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.agent-timeline-header__col {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Timeline List ── */
+.agent-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* ── Timeline Row ── */
+.agent-timeline-row {
+  display: grid;
+  grid-template-columns: 80px 200px 1fr 100px 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius);
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+
+.agent-timeline-row:hover {
+  background: var(--card-hover);
+}
+
+.agent-timeline-row--running {
+  border-left-color: var(--sky);
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.agent-timeline-row__status {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.agent-timeline-row__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-timeline-row__task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-timeline-row__task span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-timeline-row__time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.agent-timeline-row__duration {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.duration--running {
+  color: var(--sky);
+}
+
+/* ── Timeline Summary ── */
+.agent-timeline-summary {
+  display: flex;
+  gap: 24px;
+  padding: 12px 14px;
+  margin-top: 12px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  border-top: 1px solid var(--card-border);
+}
+
+.agent-timeline-summary__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.agent-timeline-summary__item svg {
+  color: var(--text-dim);
+}
+
+/* ── Responsive for Historic Section ── */
+@media (max-width: 1024px) {
+  .bento-card--productivity { grid-column: span 12; }
+  .bento-card--folders { grid-column: span 12; }
+}
+
+@media (max-width: 768px) {
+  .historic-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  
+  .historic-stats {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  
+  .agent-timeline-header,
+  .agent-timeline-row {
+    grid-template-columns: 70px 1fr 80px 80px;
+  }
+  
+  .agent-timeline-row__task {
+    display: none;
+  }
+  
+  .agent-timeline-header__col--task {
+    display: none;
+  }
+}

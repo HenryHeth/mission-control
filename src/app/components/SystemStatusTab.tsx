@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { 
   Activity, Server, Phone, Clock, CheckCircle2, 
   XCircle, AlertTriangle, RefreshCw, Cpu, Zap,
-  Calendar, Terminal
+  Calendar, Terminal, User, Timer, FileText
 } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, differenceInSeconds, differenceInMinutes, differenceInHours } from 'date-fns';
 
 /* ═══════════════════════════════════════════════════════
-   Mission Control — System Status Tab
-   Voice server health, Gateway status, Cron jobs, Sub-agents
+   Mission Control — System Status Tab v1.5
+   Services, Voice server, Cron jobs, Sub-agent Timeline
    ═══════════════════════════════════════════════════════ */
 
 interface ServiceStatus {
@@ -42,13 +42,17 @@ interface CronJob {
 interface SubAgent {
   id: string;
   label: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'pending';
   startTime: Date;
   endTime?: Date;
   task: string;
+  model?: string;
+  tokensUsed?: number;
 }
 
-function StatusBadge({ status }: { status: 'online' | 'offline' | 'degraded' | 'unknown' | 'success' | 'failed' | 'pending' | 'running' | 'completed' }) {
+type StatusType = 'online' | 'offline' | 'degraded' | 'unknown' | 'success' | 'failed' | 'pending' | 'running' | 'completed';
+
+function StatusBadge({ status }: { status: StatusType }) {
   const colors: Record<string, { bg: string; color: string; label: string }> = {
     online: { bg: 'var(--emerald-dim)', color: 'var(--emerald)', label: 'Online' },
     offline: { bg: 'var(--red-dim)', color: 'var(--red)', label: 'Offline' },
@@ -58,7 +62,7 @@ function StatusBadge({ status }: { status: 'online' | 'offline' | 'degraded' | '
     failed: { bg: 'var(--red-dim)', color: 'var(--red)', label: 'Failed' },
     pending: { bg: 'rgba(100,116,139,0.12)', color: '#64748B', label: 'Pending' },
     running: { bg: 'var(--sky-dim)', color: 'var(--sky)', label: 'Running' },
-    completed: { bg: 'var(--emerald-dim)', color: 'var(--emerald)', label: 'Completed' },
+    completed: { bg: 'var(--emerald-dim)', color: 'var(--emerald)', label: 'Done' },
   };
   
   const c = colors[status] || colors.unknown;
@@ -173,23 +177,52 @@ function CronJobRow({ job }: { job: CronJob }) {
   );
 }
 
-function SubAgentRow({ agent }: { agent: SubAgent }) {
-  const duration = agent.endTime 
-    ? Math.round((agent.endTime.getTime() - agent.startTime.getTime()) / 1000)
-    : Math.round((Date.now() - agent.startTime.getTime()) / 1000);
+function formatDuration(startTime: Date, endTime?: Date): string {
+  const end = endTime || new Date();
+  const seconds = differenceInSeconds(end, startTime);
+  
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  
+  const minutes = differenceInMinutes(end, startTime);
+  if (minutes < 60) {
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  
+  const hours = differenceInHours(end, startTime);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
+}
+
+function SubAgentTimelineRow({ agent }: { agent: SubAgent }) {
+  const isRunning = agent.status === 'running';
   
   return (
-    <div className="subagent-row">
-      <div className="subagent-row__info">
-        <div className="subagent-row__label">{agent.label}</div>
-        <div className="subagent-row__task">{agent.task}</div>
+    <div className={`agent-timeline-row ${isRunning ? 'agent-timeline-row--running' : ''}`}>
+      <div className="agent-timeline-row__status">
+        <StatusBadge status={agent.status} />
       </div>
-      <div className="subagent-row__timing">
-        <span>{formatDistanceToNow(agent.startTime, { addSuffix: true })}</span>
-        <span>·</span>
-        <span>{duration}s</span>
+      <div className="agent-timeline-row__name">
+        <Terminal size={14} style={{ color: isRunning ? 'var(--sky)' : 'var(--text-dim)' }} />
+        <span>{agent.label}</span>
       </div>
-      <StatusBadge status={agent.status} />
+      <div className="agent-timeline-row__task">
+        <FileText size={12} style={{ color: 'var(--text-dim)' }} />
+        <span title={agent.task}>{agent.task}</span>
+      </div>
+      <div className="agent-timeline-row__time">
+        <Clock size={12} style={{ color: 'var(--text-dim)' }} />
+        <span>{format(agent.startTime, 'h:mm a')}</span>
+      </div>
+      <div className="agent-timeline-row__duration">
+        <Timer size={12} style={{ color: isRunning ? 'var(--sky)' : 'var(--text-dim)' }} />
+        <span className={isRunning ? 'duration--running' : ''}>
+          {formatDuration(agent.startTime, agent.endTime)}
+          {isRunning && ' ⏱'}
+        </span>
+      </div>
     </div>
   );
 }
@@ -277,22 +310,56 @@ export default function SystemStatusTab() {
       }
     ]);
 
-    // Sample sub-agents
+    // Sample sub-agents with realistic data
     setSubAgents([
       {
-        id: 'abc123',
-        label: 'overnight-mission-control',
+        id: 'overnight-mc-dashboard',
+        label: 'overnight-mc-dashboard-merge',
         status: 'running',
-        startTime: new Date(Date.now() - 120000),
-        task: 'Build Mission Control v1.5'
+        startTime: new Date(Date.now() - 180000), // 3 min ago
+        task: 'Mission Control v1.5 dashboard merging',
+        model: 'claude-opus-4-5',
+        tokensUsed: 45000
       },
       {
-        id: 'def456',
-        label: 'research-agent',
+        id: 'research-travel',
+        label: 'research-travel-apis',
         status: 'completed',
-        startTime: new Date(Date.now() - 3600000),
-        endTime: new Date(Date.now() - 3300000),
-        task: 'Research travel APIs'
+        startTime: new Date(Date.now() - 2 * 3600000), // 2 hours ago
+        endTime: new Date(Date.now() - 1.5 * 3600000),
+        task: 'Research flight booking APIs for trip planning',
+        model: 'claude-sonnet-4',
+        tokensUsed: 28000
+      },
+      {
+        id: 'calendar-sync',
+        label: 'calendar-event-sync',
+        status: 'completed',
+        startTime: new Date(Date.now() - 4 * 3600000),
+        endTime: new Date(Date.now() - 3.9 * 3600000),
+        task: 'Sync Google Calendar events',
+        model: 'gemini-2.5-flash-lite',
+        tokensUsed: 3500
+      },
+      {
+        id: 'email-draft',
+        label: 'email-draft-writer',
+        status: 'completed',
+        startTime: new Date(Date.now() - 6 * 3600000),
+        endTime: new Date(Date.now() - 5.8 * 3600000),
+        task: 'Draft follow-up emails for meetings',
+        model: 'claude-sonnet-4',
+        tokensUsed: 12000
+      },
+      {
+        id: 'doc-research',
+        label: 'doc-research-agent',
+        status: 'failed',
+        startTime: new Date(Date.now() - 8 * 3600000),
+        endTime: new Date(Date.now() - 7.9 * 3600000),
+        task: 'Research legal documents (timeout)',
+        model: 'claude-opus-4-5',
+        tokensUsed: 5000
       }
     ]);
 
@@ -333,7 +400,6 @@ export default function SystemStatusTab() {
     }
 
     setServices(prev => {
-      // Keep browser proxy from sample data if not checked
       const browserProxy = prev.find(s => s.name === 'Browser Proxy');
       return browserProxy ? [...results, browserProxy] : results;
     });
@@ -343,7 +409,6 @@ export default function SystemStatusTab() {
     generateSampleData();
     checkLiveServices();
     
-    // Refresh every 30 seconds
     const interval = setInterval(() => {
       checkLiveServices();
       setLastRefresh(new Date());
@@ -373,6 +438,8 @@ export default function SystemStatusTab() {
 
   const onlineCount = services.filter(s => s.status === 'online').length;
   const totalServices = services.length;
+  const runningAgents = subAgents.filter(a => a.status === 'running').length;
+  const totalAgentsToday = subAgents.length;
 
   return (
     <div className="system-status">
@@ -428,23 +495,52 @@ export default function SystemStatusTab() {
           </div>
         </div>
 
-        {/* Sub-Agents */}
-        <div className="system-status__card system-status__card--agents">
+        {/* Sub-Agent Timeline - Full Width */}
+        <div className="system-status__card system-status__card--timeline">
           <div className="system-status__card-header">
             <Terminal size={18} style={{ color: 'var(--emerald)' }} />
-            <h2>Sub-Agents</h2>
+            <h2>Sub-Agent Timeline</h2>
             <span className="system-status__card-count">
-              {subAgents.filter(a => a.status === 'running').length} running
+              {runningAgents} running · {totalAgentsToday} today
             </span>
           </div>
-          <div className="subagents-list">
+          
+          {/* Timeline Table Header */}
+          <div className="agent-timeline-header">
+            <div className="agent-timeline-header__col agent-timeline-header__col--status">Status</div>
+            <div className="agent-timeline-header__col agent-timeline-header__col--name">Agent Name</div>
+            <div className="agent-timeline-header__col agent-timeline-header__col--task">Task</div>
+            <div className="agent-timeline-header__col agent-timeline-header__col--time">Started</div>
+            <div className="agent-timeline-header__col agent-timeline-header__col--duration">Duration</div>
+          </div>
+          
+          {/* Timeline Rows */}
+          <div className="agent-timeline-list">
             {subAgents.length === 0 ? (
-              <div className="empty-state">No sub-agents active</div>
+              <div className="empty-state">No sub-agents active today</div>
             ) : (
               subAgents.map(agent => (
-                <SubAgentRow key={agent.id} agent={agent} />
+                <SubAgentTimelineRow key={agent.id} agent={agent} />
               ))
             )}
+          </div>
+          
+          {/* Capacity Summary */}
+          <div className="agent-timeline-summary">
+            <div className="agent-timeline-summary__item">
+              <User size={14} />
+              <span>Total Sessions: {totalAgentsToday}</span>
+            </div>
+            <div className="agent-timeline-summary__item">
+              <Timer size={14} />
+              <span>Avg Duration: {Math.round(subAgents.filter(a => a.endTime).reduce((sum, a) => {
+                return sum + differenceInMinutes(a.endTime!, a.startTime);
+              }, 0) / Math.max(1, subAgents.filter(a => a.endTime).length))}m</span>
+            </div>
+            <div className="agent-timeline-summary__item">
+              <Zap size={14} />
+              <span>Peak Concurrency: 2</span>
+            </div>
           </div>
         </div>
       </div>
