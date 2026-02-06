@@ -12,6 +12,14 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 
+// Try to load toodledo_client (may not be available in all environments)
+let toodledoClient = null;
+try {
+  toodledoClient = require(path.join(__dirname, '..', '..', 'scripts', 'toodledo_client'));
+} catch (e) {
+  console.log('Toodledo client not available - tasks endpoint will return sample data');
+}
+
 const PORT = parseInt(process.argv[2] || process.env.FILE_SERVER_PORT || '3456', 10);
 
 // Directories to scan for files
@@ -166,6 +174,142 @@ function getFileContent(filePath) {
   };
 }
 
+// Fetch tasks from Toodledo
+async function fetchToodledoTasks() {
+  if (!toodledoClient) {
+    // Return sample data if client not available
+    return generateSampleTaskData();
+  }
+
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const sixtyDaysAgo = now - (60 * 24 * 3600);
+    
+    // Fetch open tasks (Henry's tasks - context 1462384)
+    const openData = await toodledoClient.apiCall(
+      '/3/tasks/get.php?f=json&comp=0&fields=tag,priority,duedate,status,note,folder,added&num=300'
+    );
+    
+    // Fetch completed tasks (last 60 days worth)
+    const completedMeta = await toodledoClient.apiCall('/3/tasks/get.php?f=json&comp=1&num=1&start=0');
+    const totalCompleted = (Array.isArray(completedMeta) && completedMeta[0]?.total) || 0;
+    const startFrom = Math.max(0, totalCompleted - 500);
+    
+    const completedData = await toodledoClient.apiCall(
+      `/3/tasks/get.php?f=json&comp=1&fields=tag,priority,folder,added&num=500&start=${startFrom}`
+    );
+
+    // Filter and format
+    const completed = (Array.isArray(completedData) ? completedData : [])
+      .filter(t => t.title && t.completed && t.completed >= sixtyDaysAgo)
+      .map(t => ({
+        id: t.id,
+        title: t.title,
+        folder: getFolderName(t.folder),
+        completed: t.completed,
+        added: t.added || t.completed - 86400,
+        priority: t.priority || 1,
+      }))
+      .sort((a, b) => b.completed - a.completed);
+
+    const open = (Array.isArray(openData) ? openData : [])
+      .filter(t => t.title)
+      .map(t => ({
+        id: t.id,
+        title: t.title,
+        folder: getFolderName(t.folder),
+        completed: 0,
+        added: t.added || now - 7 * 86400,
+        priority: t.priority || 1,
+        duedate: t.duedate || undefined,
+      }));
+
+    return {
+      completed,
+      open,
+      totalOpen: open.length,
+      totalCompleted: completed.length,
+      generatedAt: new Date().toISOString(),
+      source: 'live'
+    };
+  } catch (err) {
+    console.error('Toodledo API error:', err.message);
+    return generateSampleTaskData();
+  }
+}
+
+// Map folder IDs to names (common folders)
+const FOLDER_MAP = {
+  9975528: 'pWorkflow',
+  9975529: 'pHome',
+  9975530: 'pFinancial',
+  9975531: 'pPhysical',
+  0: 'Inbox',
+};
+
+function getFolderName(folderId) {
+  return FOLDER_MAP[folderId] || `Folder ${folderId}`;
+}
+
+// Generate sample task data for fallback
+function generateSampleTaskData() {
+  const now = Math.floor(Date.now() / 1000);
+  const completed = [];
+  const open = [];
+  
+  const SAMPLE_TITLES = [
+    'Build Mission Control v1',
+    'Review sprint planning docs',
+    'Research VVO frameworks',
+    'Morning briefing automation',
+    'Update MEMORY.md',
+    'Toodledo API integration',
+    'Deploy to Vercel',
+    'Fix authentication flow',
+    'Create task velocity chart',
+    'Implement dark theme',
+  ];
+  
+  const FOLDERS = ['pWorkflow', 'pHome', 'pFinancial', 'Inbox'];
+  
+  // Generate completed tasks
+  for (let i = 0; i < 150; i++) {
+    const daysAgo = Math.floor(Math.random() * 60);
+    const completedTs = now - daysAgo * 86400 - Math.floor(Math.random() * 43200);
+    
+    completed.push({
+      id: i + 1,
+      title: SAMPLE_TITLES[i % SAMPLE_TITLES.length],
+      folder: FOLDERS[Math.floor(Math.random() * FOLDERS.length)],
+      completed: completedTs,
+      added: completedTs - Math.floor(Math.random() * 7 * 86400),
+      priority: Math.floor(Math.random() * 3) + 1,
+    });
+  }
+  
+  // Generate open tasks
+  for (let i = 0; i < 45; i++) {
+    open.push({
+      id: 1000 + i,
+      title: SAMPLE_TITLES[(i + 5) % SAMPLE_TITLES.length],
+      folder: FOLDERS[Math.floor(Math.random() * FOLDERS.length)],
+      completed: 0,
+      added: now - Math.floor(Math.random() * 30) * 86400,
+      priority: Math.floor(Math.random() * 3) + 1,
+      duedate: Math.random() > 0.5 ? now + Math.floor(Math.random() * 7 * 86400) : undefined,
+    });
+  }
+  
+  return {
+    completed: completed.sort((a, b) => b.completed - a.completed),
+    open,
+    totalOpen: open.length,
+    totalCompleted: completed.length,
+    generatedAt: new Date().toISOString(),
+    source: 'sample'
+  };
+}
+
 // Create HTTP server
 const server = http.createServer((req, res) => {
   // CORS headers
@@ -209,6 +353,21 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ status: 'ok', files: getAllFiles().length }));
     return;
   }
+
+  // Tasks API endpoint
+  if (url.pathname === '/api/tasks') {
+    fetchToodledoTasks()
+      .then(data => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+      })
+      .catch(err => {
+        console.error('Error fetching tasks:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message, completed: [], open: [] }));
+      });
+    return;
+  }
   
   // Not found
   res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -218,7 +377,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
-║     📁 Mission Control File Server                       ║
+║     📁 Mission Control File Server v1.5                  ║
 ╠══════════════════════════════════════════════════════════╣
 ║                                                          ║
 ║  Server running at http://localhost:${PORT}               ║
@@ -226,10 +385,13 @@ server.listen(PORT, () => {
 ║  Endpoints:                                              ║
 ║    GET /api/files          - List all files              ║
 ║    GET /api/files/:path    - Get file content            ║
+║    GET /api/tasks          - Toodledo tasks data         ║
 ║    GET /health             - Health check                ║
 ║                                                          ║
 ║  Watching:                                               ║
 ║    ${CLAWD_ROOT}
+║                                                          ║
+║  Toodledo: ${toodledoClient ? '✅ Connected' : '❌ Using sample data'}
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 `);

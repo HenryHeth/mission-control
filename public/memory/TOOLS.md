@@ -35,6 +35,25 @@ Skills define *how* tools work. This file is for *your* specifics — the stuff 
   - Full reports/research → upload to Google Drive, link in note
   - PRDs, design docs → keep in docs/ folder + Drive link
   - Pattern: "✅ COMPLETE — Full doc: [Drive link]"
+- **📋 NOTE FORMAT (2026-02-05):** MANDATORY structure for all task notes:
+  ```
+  Tasks:
+  1. [ ] first task
+  2. [ ] second task  
+  3. [x] completed task
+
+  --- Update YYYY-MM-DD HH:MM ---
+  [newest update here]
+  ---
+
+  --- Update YYYY-MM-DD HH:MM ---
+  [older update here]
+  ---
+  ```
+  - **TOP section = numbered task list** — NEVER moves, only checkboxes change
+  - **Numbered tasks** — so we can refer by number ("done with #2")
+  - **Updates in REVERSE order** — newest at top, oldest at bottom
+  - **NEVER delete old updates** — append above, don't overwrite
 - Paul checks Toodledo. If it's not there, he doesn't see it.
 
 ### Bitwarden

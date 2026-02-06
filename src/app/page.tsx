@@ -1,24 +1,26 @@
 'use client';
 
 import { useState } from 'react';
+import DashboardTab from './components/DashboardTab';
 import DocsTab from './components/DocsTab';
 import TasksTab from './components/TasksTab';
 import MemoryTab from './components/MemoryTab';
 import CapturesTab from './components/CapturesTab';
+import SystemStatusTab from './components/SystemStatusTab';
 
-type Tab = 'tasks' | 'projects' | 'memory' | 'captures' | 'docs' | 'people';
+type Tab = 'dashboard' | 'tasks' | 'memory' | 'captures' | 'docs' | 'system';
 
 const tabs: { id: Tab; name: string; icon: string }[] = [
+  { id: 'dashboard', name: 'Mission Control', icon: '❖' },
   { id: 'tasks', name: 'Tasks', icon: '✅' },
-  { id: 'projects', name: 'Projects', icon: '📂' },
   { id: 'memory', name: 'Memory', icon: '🧠' },
   { id: 'captures', name: 'Captures', icon: '📸' },
   { id: 'docs', name: 'Docs', icon: '📄' },
-  { id: 'people', name: 'People', icon: '👥' },
+  { id: 'system', name: 'System', icon: '🔧' },
 ];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<Tab>('tasks');
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -50,22 +52,12 @@ export default function Home() {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+        {activeTab === 'dashboard' && <DashboardTab />}
         {activeTab === 'tasks' && <TasksTab />}
         {activeTab === 'memory' && <MemoryTab />}
         {activeTab === 'captures' && <CapturesTab />}
         {activeTab === 'docs' && <DocsTab />}
-        {!['tasks', 'memory', 'captures', 'docs'].includes(activeTab) && (
-          <div className="docs-layout">
-            <div className="content-empty">
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 8 }}>
-                  {tabs.find(t => t.id === activeTab)?.icon}
-                </div>
-                <div>{tabs.find(t => t.id === activeTab)?.name} coming soon...</div>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === 'system' && <SystemStatusTab />}
       </div>
     </div>
   );
