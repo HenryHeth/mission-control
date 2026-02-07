@@ -5,6 +5,13 @@
 If it's between 11 PM and 8 AM and you reply HEARTBEAT_OK without spawning a sub-agent, YOU HAVE FAILED.
 Check the queue. Spawn agents. Do the work. This is your #1 job overnight.
 
+## 📣 OVERNIGHT STATUS UPDATE (Midnight - 8 AM)
+**Send a short Telegram status update to Paul every heartbeat overnight.**
+- Keep it to 1-2 lines max
+- Include task names being worked on (from Toodledo or sub-agent labels)
+- Example: "🌙 3:15 AM — Working: Mission Control Auth, PRD v2 Draft. 2 sub-agents active. Queue: 1 remaining."
+- This lets Paul see you're alive and focused when he checks in the morning
+
 ## ⚡ EFFICIENCY RULE
 Complete all checks with minimal output. No status summaries. No thinking out loud.
 - **Daytime (8 AM - 11 PM):** If nothing needs attention → HEARTBEAT_OK
@@ -113,3 +120,28 @@ launchctl list | grep heartbeat
 
 **State file:** `~/.clawdbot/logs/heartbeat-monitor-state.json`
 **Logs:** `~/.clawdbot/logs/heartbeat-monitor.log`
+
+### Troubleshooting: Stuck Heartbeat Scheduler
+
+**Symptom:** Status shows heartbeat age >40 min, but gateway is running (you can still chat).
+
+**Cause:** The heartbeat scheduler can get stuck after a gateway restart, even though the gateway is otherwise functional.
+
+**Fix:** Force a gateway restart by reapplying config:
+```js
+gateway({
+  action: "config.apply",
+  raw: "<full config JSON>",
+  reason: "Fix stuck heartbeat scheduler"
+})
+```
+
+Or if `commands.restart=true` is set in config:
+```bash
+clawdbot gateway restart
+```
+
+**Notes:**
+- Gateway restart takes ~5-10 seconds
+- You may need to get the full config first via `gateway({ action: "config.get" })`
+- After restart, verify heartbeat fires by checking logs: `grep heartbeat ~/.clawdbot/logs/gateway.log | tail -5`

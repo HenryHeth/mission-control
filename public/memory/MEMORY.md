@@ -1,23 +1,5 @@
 # MEMORY.md
 
-## 📘 HENRY BLUEPRINT — Capture Insights (2026-02-05)
-When we have a "this is gold" moment — a new pattern, architectural decision, or clever solution — **immediately append it to `docs/HENRY_BLUEPRINT.md`**. Don't wait for a future sweep. Capture it while the context is fresh.
-
-Examples of what to capture:
-- New conversation modes (like standup vs reflective)
-- Prompting patterns that work well
-- Integration decisions and why
-- Lessons learned from failures
-- Trust/safety rails we add
-
-## 🚨 EMAIL ACCESS — READ-ONLY FOR PAUL (2026-02-04) — RESOLVED
-- **paul@heth.ca:** READ-ONLY (gmail.readonly + calendar.readonly). Cannot send, draft, or modify.
-- **henry@heth.ca:** Full access (gmail, calendar, drive, etc.)
-- **Enforced at 3 levels:** Google API scopes, gog-safe wrapper, rules in MEMORY/SOUL
-- **New OAuth client:** Created Feb 4, credentials at ~/clawd/config/credentials.json
-- **Zero code changes needed** — all scripts already structured correctly
-- Paul's calendar accessed via henry@heth.ca (shared calendar). Paul's email read via paul@heth.ca read-only token.
-
 ## VERIFICATION RULE (2026-02-04) — THE #1 TRUST ISSUE
 - **NEVER say "done" without running the actual output and checking it**
 - **NEVER trust sub-agent "✅ done" summaries** — verify their work myself before reporting
@@ -300,17 +282,4 @@ Examples of what to capture:
 ### Research Objective Rule
 When performing research for Paul, always include a concrete plan or recommendation as part of the result. Research is not complete until a practical next step or strategy is presented.
 
-### 📝 Note-Taking Rule (Reverse Chronological)
-**Newest information ALWAYS goes at the TOP.**
-- **Prepend** new updates above older notes.
-- Use a separator (`---`) or timestamp header.
-- Never force Paul to scroll to find the latest status.
-- Format:
-  ```
-  [YYYY-MM-DD HH:MM] Newest Update
-  Details...
-  
-  ---
-  
-  [Old Date] Old Update
-  ```
+When updating task notes in Toodledo, never overwrite the existing notes. Always append new notes above the old ones, so the history is preserved.

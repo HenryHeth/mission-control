@@ -23,6 +23,7 @@ Skills define *how* tools work. This file is for *your* specifics — the stuff 
 - **Progress:** ALWAYS log in BOTH task notes AND memory files
 - **Task notes must include:** what was completed, links to outputs (Drive, GitHub), next steps
 - **📝 NOTES GO AT THE TOP:** New updates PREPEND above old notes (reverse chronological). Paul should never scroll to see latest status. Format: `--- Update YYYY-MM-DD ---\n[new content]\n\n---\n\n[old content]`
+- **⚠️ TASK-SPECIFIC OVERRIDES:** If a task note has explicit formatting (e.g., "Add updates below this line"), FOLLOW THAT instead of the general rule. Read the existing note structure first.
 - **⚡ REAL-TIME UPDATES (2026-02-05):** Update task notes IMMEDIATELY when:
   - Sub-agent completes and reports back → update note RIGHT AWAY
   - Any progress happens during conversation → update note before moving on
@@ -55,6 +56,30 @@ Skills define *how* tools work. This file is for *your* specifics — the stuff 
   - **Updates in REVERSE order** — newest at top, oldest at bottom
   - **NEVER delete old updates** — append above, don't overwrite
 - Paul checks Toodledo. If it's not there, he doesn't see it.
+- 🚨 **NEVER DELETE TASKS** — Paul handles all deletions. Search thoroughly before creating to avoid duplicates.
+- **🔗 TASK LINKS (2026-02-07):** To get permanent link: Toodledo web → Action button (left of task) → "Permanent Link"
+- **🚧 BLOCKER ESCALATION (2026-02-07):** When blocked on overnight work:
+  1. Get task permanent link from Toodledo
+  2. Email paul@heth.ca with: task link + specific questions to unblock
+  3. Update task note: "Emailed Paul — waiting for input"
+  4. Move to next task (don't wait idle)
+- **❓ OVERNIGHT Q&A (2026-02-07):** Before starting overnight work:
+  1. Read all task notes deeply
+  2. Ask Paul clarifying questions
+  3. Save his answers to each task note (tight summary, below subtasks)
+  4. Then start work — task notes are source of truth
+
+### Google Drive Sync (Workspace)
+- **Folder:** Henry-Clawd-Workspace
+- **Folder ID:** `1zXtBxhhGZU9aVtPMoI8IWbSyqxqO6r_C`
+- **Shared Link:** https://drive.google.com/drive/folders/1zXtBxhhGZU9aVtPMoI8IWbSyqxqO6r_C
+- **Account:** henry@heth.ca
+- **Permissions:** Anyone with link can view (reader)
+- **Sync Script:** `scripts/gdrive-sync.sh`
+  - `./scripts/gdrive-sync.sh` - syncs core files (SOUL, USER, AGENTS, MEMORY, TOOLS)
+  - `./scripts/gdrive-sync.sh --all` - also syncs memory/ and research/
+- **Manual upload:** `GOG_KEYRING_PASSWORD="henrybot" gog drive upload FILE.md --parent 1zXtBxhhGZU9aVtPMoI8IWbSyqxqO6r_C --account henry@heth.ca`
+- **Note:** MD files display as raw text in Drive preview. For formatted view, open in a markdown-capable app or use HTML conversion.
 
 ### Bitwarden
 - **CLI:** `bw` installed, account henry@heth.ca
@@ -133,7 +158,7 @@ browser.disconnect(); // NOT browser.close()
 - **Main session:** Opus 4.5 → GPT 5.2 → Gemini 3 Pro (fallback chain)
 - **Sub-agents:** Opus 4.5
 - **Heartbeats:** Gemini 2.5 Flash Lite (free tier, minimal burn)
-- **Thinking:** XHIGH (Opus 4.5 designed around extended thinking — OFF wastes its main advantage)
+- **Thinking:** HIGH (config says XHIGH but Opus 4.5 max is HIGH — auto-downgrades)
 - **Tier:** Anthropic 20X (goal: step down to 5X next week once efficiency systems solid)
 - **Config:** `agents.defaults` in `~/.clawdbot/clawdbot.json`
 - **Notes:** TOOLS.md (this section) is the human-readable record

@@ -4,11 +4,11 @@ import { useRouter } from 'next/navigation';
 import { ReactNode } from 'react';
 import { 
   Zap, CheckSquare, Brain, Camera, FileText, 
-  Settings, Target, LogOut, LucideIcon
+  Settings, Target, LogOut, DollarSign, LucideIcon
 } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 
-type Tab = 'dashboard' | 'tasks' | 'memory' | 'captures' | 'docs' | 'vvo' | 'system';
+type Tab = 'dashboard' | 'tasks' | 'memory' | 'captures' | 'docs' | 'vvo' | 'system' | 'spending';
 
 interface TabConfig {
   id: Tab;
@@ -25,6 +25,7 @@ const tabs: TabConfig[] = [
   { id: 'memory', name: 'Memory', icon: Brain, path: '/memory', color: 'var(--emerald)' },
   { id: 'captures', name: 'Captures', icon: Camera, path: '/captures', color: 'var(--sky)' },
   { id: 'docs', name: 'Docs', icon: FileText, path: '/docs', color: 'var(--text-muted)' },
+  { id: 'spending', name: 'Spending', icon: DollarSign, path: '/spending', color: 'var(--amber)' },
   { id: 'system', name: 'System', icon: Settings, path: '/system', color: 'var(--sky)' },
 ];
 
