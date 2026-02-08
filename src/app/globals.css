@@ -1889,9 +1889,9 @@ body {
   overflow: hidden;
 }
 
-.system-status__card--services { grid-column: span 6; }
+.system-status__card--services { grid-column: span 3; }
 .system-status__card--voice { grid-column: span 3; }
-.system-status__card--cron { grid-column: span 3; }
+.system-status__card--cron { grid-column: span 6; }
 .system-status__card--agents { grid-column: span 5; }
 
 .system-status__card-header {
@@ -1928,9 +1928,45 @@ body {
 
 /* ── Service Cards ── */
 .services-list {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.service-card-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.service-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.service-name-compact {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.service-port-compact {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-family: monospace;
+}
+
+.services-summary {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--emerald);
 }
 
 .service-card {
