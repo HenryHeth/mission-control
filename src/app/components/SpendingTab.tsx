@@ -16,6 +16,8 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pi
    "If we miss any, we leak money"
    ═══════════════════════════════════════════════════════ */
 
+const LIVE_API_URL = process.env.NEXT_PUBLIC_LIVE_API_URL || 'http://localhost:3456';
+
 const COLORS = {
   anthropic: '#D97706',  // Amber
   openai: '#10B981',     // Emerald
@@ -349,7 +351,61 @@ export default function SpendingTab() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [activeCategory, setActiveCategory] = useState<string>('all');
 
-  // Generate sample data for demo
+  const [dataSource, setDataSource] = useState<'live' | 'sample'>('sample');
+
+  // Fetch spending data from API
+  const fetchSpendingData = async (forceRefresh = false) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const url = `${LIVE_API_URL}/api/spending${forceRefresh ? '?refresh=true' : ''}`;
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+      
+      if (res.ok) {
+        const data = await res.json();
+        
+        // Update services with live data
+        if (data.providers) {
+          const updatedServices = services.map(s => {
+            const provider = data.providers[s.id];
+            if (provider) {
+              if (provider.available) {
+                return {
+                  ...s,
+                  todayCost: provider.todayCost || s.todayCost,
+                  monthCost: provider.estimatedMonthly || provider.totalUsed || s.monthCost,
+                  weekCost: (provider.estimatedMonthly || provider.totalUsed || s.monthCost) / 4,
+                  lastUpdated: new Date(),
+                };
+              } else if (provider.estimatedMonthly) {
+                return {
+                  ...s,
+                  monthCost: provider.estimatedMonthly,
+                  weekCost: provider.estimatedMonthly / 4,
+                  todayCost: provider.estimatedMonthly / 30,
+                };
+              }
+            }
+            return s;
+          });
+          setServices(updatedServices);
+        }
+        
+        setDataSource(data.source === 'sample' ? 'sample' : 'live');
+        setLastUpdated(new Date(data.collectedAt || Date.now()));
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch live spending data, using sample:', e);
+    }
+    
+    // Fallback to sample data
+    generateSampleData();
+  };
+
+  // Generate sample data for demo/fallback
   const generateSampleData = () => {
     const now = new Date();
     const daily: DailySpend[] = [];
@@ -403,13 +459,16 @@ export default function SpendingTab() {
       { date: '2026-02-06 2:15 PM', duration: '3m 48s', twilioCost: 0.05, openaiCost: 1.14, totalCost: 1.19 },
     ]);
     
+    setDataSource('sample');
     setLoading(false);
     setLastUpdated(new Date());
   };
 
   useEffect(() => {
-    generateSampleData();
-    // TODO: Replace with actual API calls to fetch spending data
+    fetchSpendingData();
+    // Refresh every 15 minutes
+    const interval = setInterval(() => fetchSpendingData(), 15 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const toggleService = (id: string) => {
@@ -473,7 +532,10 @@ export default function SpendingTab() {
           <h1>Spending</h1>
         </div>
         <div className="spending__meta">
-          <button className="refresh-btn" onClick={generateSampleData}>
+          <span className={`source-badge source-badge--${dataSource === 'live' ? 'live' : 'bundled'}`}>
+            {dataSource === 'live' ? '🟢 Live' : '🟡 Sample Data'}
+          </span>
+          <button className="refresh-btn" onClick={() => fetchSpendingData(true)}>
             <RefreshCw size={14} />
             Refresh
           </button>

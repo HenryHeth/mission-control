@@ -20,6 +20,14 @@ try {
   console.log('Toodledo client not available - tasks endpoint will return sample data');
 }
 
+// Try to load spending collector
+let spendingCollector = null;
+try {
+  spendingCollector = require(path.join(__dirname, 'spending-collector'));
+} catch (e) {
+  console.log('Spending collector not available - spending endpoint will return sample data');
+}
+
 const PORT = parseInt(process.argv[2] || process.env.FILE_SERVER_PORT || '3456', 10);
 
 // Directories to scan for files
@@ -251,6 +259,50 @@ function getFolderName(folderId) {
   return FOLDER_MAP[folderId] || `Folder ${folderId}`;
 }
 
+// Generate sample spending data for fallback
+function generateSampleSpendingData() {
+  const now = new Date();
+  return {
+    collectedAt: now.toISOString(),
+    fromCache: false,
+    source: 'sample',
+    providers: {
+      anthropic: {
+        available: false,
+        error: 'Sample data mode',
+        estimatedMonthly: 150 + Math.random() * 100,
+      },
+      openai: {
+        available: false,
+        error: 'Sample data mode',
+        estimatedMonthly: 50 + Math.random() * 50,
+      },
+      openrouter: {
+        available: true,
+        totalUsed: 15 + Math.random() * 20,
+        limit: 50,
+      },
+      twilio: {
+        available: false,
+        error: 'Sample data mode',
+        estimatedMonthly: 20 + Math.random() * 30,
+      },
+      elevenlabs: {
+        available: true,
+        characterCount: Math.floor(5000 + Math.random() * 10000),
+        characterLimit: 30000,
+        tier: 'starter',
+      },
+    },
+    summary: {
+      totalProviders: 5,
+      availableCount: 2,
+      todayEstimate: 8 + Math.random() * 10,
+      calculatedAt: now.toISOString(),
+    },
+  };
+}
+
 // Generate sample task data for fallback
 function generateSampleTaskData() {
   const now = Math.floor(Date.now() / 1000);
@@ -369,6 +421,44 @@ const server = http.createServer((req, res) => {
     return;
   }
   
+  // Spending API endpoint
+  if (url.pathname === '/api/spending') {
+    const forceRefresh = url.searchParams.get('refresh') === 'true';
+    
+    if (spendingCollector) {
+      spendingCollector.getSpendingData(forceRefresh)
+        .then(data => {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(data));
+        })
+        .catch(err => {
+          console.error('Error fetching spending:', err.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message, providers: {} }));
+        });
+    } else {
+      // Return sample spending data
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(generateSampleSpendingData()));
+    }
+    return;
+  }
+  
+  // Spending history endpoint
+  if (url.pathname === '/api/spending/history') {
+    const days = parseInt(url.searchParams.get('days') || '7', 10);
+    
+    if (spendingCollector) {
+      const history = spendingCollector.loadHistoricalData(days);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ history, days }));
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ history: [], days, source: 'sample' }));
+    }
+    return;
+  }
+  
   // Not found
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not found' }));
@@ -386,12 +476,16 @@ server.listen(PORT, () => {
 ║    GET /api/files          - List all files              ║
 ║    GET /api/files/:path    - Get file content            ║
 ║    GET /api/tasks          - Toodledo tasks data         ║
+║    GET /api/spending       - API spending/costs          ║
+║    GET /api/spending/history?days=7 - Historical data    ║
 ║    GET /health             - Health check                ║
 ║                                                          ║
 ║  Watching:                                               ║
 ║    ${CLAWD_ROOT}
 ║                                                          ║
-║  Toodledo: ${toodledoClient ? '✅ Connected' : '❌ Using sample data'}
+║  Integrations:                                           ║
+║    Toodledo: ${toodledoClient ? '✅ Connected' : '❌ Sample data'}
+║    Spending: ${spendingCollector ? '✅ Connected' : '❌ Sample data'}
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 `);

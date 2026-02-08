@@ -5,60 +5,94 @@ Skills define *how* tools work. This file is for *your* specifics — the stuff 
 ## Integrations
 
 ### Toodledo
+
+#### ⚠️ CRITICAL RULES (2026-02-07) ⚠️
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  🚨 NEVER DELETE TASKS — Paul handles all deletions             │
+│  🎯 ONLY I (main session) UPDATE TOODLEDO — not sub-agents      │
+│  📝 PREPEND NEW NOTES — never overwrite or remove old content   │
+│  ⏱️ UPDATE IMMEDIATELY — don't batch, don't wait                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Task Ownership:** Sub-agents do work and report back. I update task notes with their results. This centralizes control and prevents chaos.
+
+**Note Format:** Task list FIRST, then updates below:
+```
+Tasks:
+1. [ ] subtask one
+2. [x] subtask two (completed)
+
+--- Update YYYY-MM-DD HH:MM ---
+[newest update here]
+---
+
+--- Update YYYY-MM-DD HH:MM ---
+[older update here]
+---
+```
+
+**Golden Rules:**
+1. Task list stays at TOP — never put updates above it
+2. New updates go above OLD updates (not above task list)
+3. Paul should NEVER scroll to see latest status
+4. NEVER delete old updates — only add above
+5. If task note has explicit formatting, follow THAT instead
+6. Search before creating (avoid duplicates)
+
+---
+
+#### Setup & Config
 - **Setup Guide:** [TOODLEDO_SETUP.md](./TOODLEDO_SETUP.md)
 - **Credentials:** `toodledo_credentials.json`
+- **🚨 USE THIS FOR UPDATES:** `scripts/toodledo_safe_update.js` — validates format before submitting
 - **Working Scripts:** `scripts/toodledo_update_fix.js`, `scripts/toodledo_add_task.js`
-- **Defaults when creating:** Folder: pWorkflow (ID: 9975528), Priority: Med (1) — set these unless a specific topic folder is more appropriate (pHome, pPhysical, pFinancial, etc.)
-- **Task views (updated 2026-02-04):**
-  - All of Henry's Tasks: https://tasks.toodledo.com/saved/240291#
-  - Henry's Tasks for Today: https://tasks.toodledo.com/saved/240292#
-  - Henry's Overnight Tasks: https://tasks.toodledo.com/saved/240293# (tag-based)
-  - Henry Done In Last 7 Days: https://tasks.toodledo.com/saved/240295#
-  - Paul's Tasks for Today: https://tasks.toodledo.com/saved/240253#
-- **Context IDs (owner field):**
-  - Henry: 1462384
-  - Henry90: 1462406
-  - Paul: 1462385
-- **"Henry:90" prefix:** Henry can do ~90% independently, needs Paul for the last ~10% (credentials, decisions, physical actions)
-- **Progress:** ALWAYS log in BOTH task notes AND memory files
+- **Defaults when creating:** Folder: pWorkflow (ID: 9975528), Priority: Med (1)
+
+#### Safe Update Script (MANDATORY)
+```bash
+# Show current note structure
+node scripts/toodledo_safe_update.js <taskId> --show
+
+# Add update (auto-timestamps, validates format)
+node scripts/toodledo_safe_update.js <taskId> --update "Your update text"
+
+# Mark subtask complete
+node scripts/toodledo_safe_update.js <taskId> --check-task 2 --update "Completed task 2"
+
+# Dry run (validate without submitting)
+node scripts/toodledo_safe_update.js <taskId> --update "text" --dry-run
+```
+**This script enforces format — use it instead of raw API calls.**
+
+**User tags** (for multi-agent tracking):
+- Default: `Henry` (main session)
+- Override: `--user "O-research"` for overnight sub-agents
+- Override: `--user "Paul"` if Paul updates directly
+- Format: `--- 2026-02-07 15:00 [Henry] ---`
+
+#### Task Views
+- All of Henry's Tasks: https://tasks.toodledo.com/saved/240291#
+- Henry's Tasks for Today: https://tasks.toodledo.com/saved/240292#
+- Henry's Overnight Tasks: https://tasks.toodledo.com/saved/240293#
+- Henry Done In Last 7 Days: https://tasks.toodledo.com/saved/240295#
+- Paul's Tasks for Today: https://tasks.toodledo.com/saved/240253#
+
+#### Context IDs (owner field)
+- Henry: 1462384
+- Henry90: 1462406
+- Paul: 1462385
+
+#### Note Content Rules
 - **Task notes must include:** what was completed, links to outputs (Drive, GitHub), next steps
-- **📝 NOTES GO AT THE TOP:** New updates PREPEND above old notes (reverse chronological). Paul should never scroll to see latest status. Format: `--- Update YYYY-MM-DD ---\n[new content]\n\n---\n\n[old content]`
-- **⚠️ TASK-SPECIFIC OVERRIDES:** If a task note has explicit formatting (e.g., "Add updates below this line"), FOLLOW THAT instead of the general rule. Read the existing note structure first.
-- **⚡ REAL-TIME UPDATES (2026-02-05):** Update task notes IMMEDIATELY when:
-  - Sub-agent completes and reports back → update note RIGHT AWAY
-  - Any progress happens during conversation → update note before moving on
-  - Never batch updates — memory loss can happen anytime
-  - This protects against compaction/context loss wiping progress
-- **📏 NOTE SIZE RULE (2026-02-05):** Keep notes concise (limit: 32KB)
-  - **200 word limit** — anything longer becomes a formatted report on Drive
-  - **ALWAYS use henry@heth.ca Drive** — not hethfam7, not paul@heth.ca
-  - Brief status updates in notes (what, when, next step)
-  - Full reports/research → upload to Google Drive, link in note
-  - PRDs, design docs → keep in docs/ folder + Drive link
-  - Pattern: "✅ COMPLETE — Full doc: [Drive link]"
-- **📋 NOTE FORMAT (2026-02-05):** MANDATORY structure for all task notes:
-  ```
-  Tasks:
-  1. [ ] first task
-  2. [ ] second task  
-  3. [x] completed task
-
-  --- Update YYYY-MM-DD HH:MM ---
-  [newest update here]
-  ---
-
-  --- Update YYYY-MM-DD HH:MM ---
-  [older update here]
-  ---
-  ```
-  - **TOP section = numbered task list** — NEVER moves, only checkboxes change
-  - **Numbered tasks** — so we can refer by number ("done with #2")
-  - **Updates in REVERSE order** — newest at top, oldest at bottom
-  - **NEVER delete old updates** — append above, don't overwrite
+- **200 word limit** — longer content goes to Drive with link in note
+- **ALWAYS use henry@heth.ca Drive** for uploads
 - Paul checks Toodledo. If it's not there, he doesn't see it.
-- 🚨 **NEVER DELETE TASKS** — Paul handles all deletions. Search thoroughly before creating to avoid duplicates.
-- **🔗 TASK LINKS (2026-02-07):** To get permanent link: Toodledo web → Action button (left of task) → "Permanent Link"
-- **🚧 BLOCKER ESCALATION (2026-02-07):** When blocked on overnight work:
+
+#### Workflow
+- **🔗 TASK LINKS:** Toodledo web → Action button → "Permanent Link"
+- **🚧 BLOCKER ESCALATION:** When blocked on overnight work:
   1. Get task permanent link from Toodledo
   2. Email paul@heth.ca with: task link + specific questions to unblock
   3. Update task note: "Emailed Paul — waiting for input"

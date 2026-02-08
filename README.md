@@ -1,12 +1,28 @@
-# Mission Control v1.6
+# Mission Control v1.7
 
 **One app, one URL, one bookmark.** Everything Paul needs to manage his day without sitting at a desk.
 
-![Mission Control](https://img.shields.io/badge/version-1.6.0-blue)
+![Mission Control](https://img.shields.io/badge/version-1.7.0-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![Tailwind](https://img.shields.io/badge/Tailwind-4-38bdf8)
 
-## ✨ What's New in v1.5
+## ✨ What's New in v1.7
+
+### 💰 Spending Tab (NEW)
+- **Service catalog** — Complete audit of all API costs and subscriptions
+- **Daily burn rate** — Track daily spending with warning thresholds
+- **7-day trend chart** — Stacked bar chart of spending by provider
+- **Category breakdown** — AI/LLM, Infrastructure, SaaS, Domains
+- **Voice call costs** — Combined Twilio + OpenAI per-call tracking
+- **Live API integration** — Real data from Anthropic, OpenAI, OpenRouter, Twilio, ElevenLabs
+- **Dashboard links** — Quick access to provider billing pages
+
+### 🔧 File Server Enhancements
+- `/api/spending` — API spending data endpoint
+- `/api/spending/history?days=7` — Historical spending data
+- Spending data collector with caching
+
+## Previous Updates (v1.5-1.6)
 
 ### 🏠 Homepage Dashboard
 - **At-a-glance metrics** — Desk time, Computer, Mobile, YouTube hours
@@ -55,6 +71,7 @@ npm start
 |-----|---------|
 | **Mission Control** | At-a-glance dashboard with metrics |
 | **Tasks** | Toodledo velocity, closes, backlog |
+| **Spending** | API costs, subscriptions, burn rate |
 | **Memory** | Daily logs + MEMORY.md |
 | **Captures** | Telegram + voice call transcripts |
 | **Docs** | All workspace documentation |
@@ -63,25 +80,26 @@ npm start
 ## 🔌 Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                  Mission Control                 │
-│            (Next.js + Tailwind CSS)             │
-├─────────────────────────────────────────────────┤
-│                                                  │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐        │
-│  │Dashboard│  │  Tasks  │  │  Docs   │   ...  │
-│  └────┬────┘  └────┬────┘  └────┬────┘        │
-│       │            │            │              │
-├───────┼────────────┼────────────┼──────────────┤
-│       ▼            ▼            ▼              │
-│  ┌─────────────────────────────────────────┐  │
-│  │           File Server (3456)            │  │
-│  │  /api/files  /api/tasks  /health        │  │
-│  └─────────────────────────────────────────┘  │
-│       │            │                          │
-│       ▼            ▼                          │
-│  Local Files   Toodledo API                   │
-└─────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│                    Mission Control                      │
+│              (Next.js + Tailwind CSS)                   │
+├────────────────────────────────────────────────────────┤
+│                                                         │
+│  ┌──────────┐ ┌───────┐ ┌────────┐ ┌──────┐ ┌──────┐  │
+│  │Dashboard │ │ Tasks │ │Spending│ │ Docs │ │System│  │
+│  └────┬─────┘ └───┬───┘ └───┬────┘ └──┬───┘ └──┬───┘  │
+│       │           │         │         │        │       │
+├───────┼───────────┼─────────┼─────────┼────────┼───────┤
+│       ▼           ▼         ▼         ▼        ▼       │
+│  ┌────────────────────────────────────────────────┐   │
+│  │              File Server (3456)                │   │
+│  │  /api/files  /api/tasks  /api/spending        │   │
+│  └────────────────────────────────────────────────┘   │
+│       │           │              │                     │
+│       ▼           ▼              ▼                     │
+│  Local Files   Toodledo    Anthropic/OpenAI/          │
+│                  API        Twilio/ElevenLabs          │
+└────────────────────────────────────────────────────────┘
 ```
 
 ## 🎨 Design Principles
@@ -168,6 +186,17 @@ vercel --prod
 Note: Production deployment uses bundled files (prebuild step). Live file server features require local development mode.
 
 ## 📋 Changelog
+
+### v1.7.0 (2026-02-08)
+- 💰 **NEW: Spending Tab** — Track all API costs and subscriptions
+- 💰 Service catalog with 13+ services categorized
+- 💰 Daily burn rate with warning/danger thresholds
+- 💰 7-day stacked bar chart trend
+- 💰 Category pie chart breakdown
+- 💰 Voice call combined cost tracking
+- 🔧 New spending data collector script
+- 🔧 `/api/spending` and `/api/spending/history` endpoints
+- 🔧 Live data from provider APIs (with sample fallback)
 
 ### v1.6.0 (2026-02-06)
 - 🔐 Added Google OAuth authentication (NextAuth.js)
