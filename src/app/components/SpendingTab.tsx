@@ -16,7 +16,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pi
    "If we miss any, we leak money"
    ═══════════════════════════════════════════════════════ */
 
-const LIVE_API_URL = process.env.NEXT_PUBLIC_LIVE_API_URL || 'http://localhost:3456';
+const LIVE_API_URL = "";
 
 const COLORS = {
   anthropic: '#D97706',  // Amber

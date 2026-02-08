@@ -18,7 +18,8 @@ import { format, subDays, formatDistanceToNow, startOfYear, endOfYear, isWithinI
    HISTORIC: Yearly trends, Folder breakdown, Productivity
    ═══════════════════════════════════════════════════════ */
 
-const LIVE_API_URL = process.env.NEXT_PUBLIC_LIVE_API_URL || 'http://localhost:3456';
+// Use local API route - no external dependency needed
+const LIVE_API_URL = '';
 
 const COLORS = ['#10B981', '#38BDF8', '#FBBF24', '#F87171', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
 
