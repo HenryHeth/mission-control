@@ -2,6 +2,30 @@
 
 Skills define *how* tools work. This file is for *your* specifics — the stuff that's unique to your setup.
 
+## System Alert Protocol (2026-02-08)
+**Treat system messages as ACTION ITEMS, not informational.**
+
+| Alert Type | Action |
+|------------|--------|
+| 🔴 Down (any service) | Fix immediately, then message Paul confirming resolved |
+| Token refresh cron | Run the command when it fires |
+| Voice server health | Check every heartbeat, auto-restart if down |
+| Exec failed | Investigate, fix if possible, alert Paul if not |
+
+**Voice Server Restart:**
+```bash
+pkill -f "node.*voice-realtime" 2>/dev/null
+cd ~/clawd/voice-realtime && node index.js &
+sleep 2 && curl -s http://localhost:6060/
+```
+
+**Toodledo Token Refresh:**
+```bash
+cd /Users/henry_notabot/clawd && node -e "require('./scripts/toodledo_client.js').getFolders().then(() => console.log('Token refreshed')).catch(e => console.error(e))"
+```
+
+---
+
 ## Integrations
 
 ### Toodledo

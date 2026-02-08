@@ -3,8 +3,150 @@ import fs from 'fs';
 import path from 'path';
 
 /* ═══════════════════════════════════════════════
-   System Status API — Filesystem + Config data
+   System Status API — Live Services + Filesystem
    ═══════════════════════════════════════════════ */
+
+interface ServiceStatus {
+  name: string;
+  status: 'online' | 'offline' | 'degraded' | 'unknown';
+  lastCheck: string;
+  details?: string;
+  uptime?: number;
+  version?: string;
+}
+
+interface VoiceServerMetrics {
+  status: 'online' | 'offline' | 'unknown';
+  activeCalls: number;
+  totalCalls: number;
+  uptime?: number;
+  lastError?: string;
+  lastErrorTime?: string;
+}
+
+// Check if a service is running by trying to connect
+async function checkService(url: string, timeoutMs = 2000): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      return res.ok || res.status < 500;
+    } catch {
+      clearTimeout(timeoutId);
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
+
+// Get gateway status from clawdbot CLI or direct check
+async function getGatewayStatus(): Promise<ServiceStatus> {
+  const result: ServiceStatus = {
+    name: 'Clawdbot Gateway',
+    status: 'unknown',
+    lastCheck: new Date().toISOString(),
+    details: 'Port 18789'
+  };
+  
+  try {
+    // Gateway runs on port 18789
+    const isOnline = await checkService('http://127.0.0.1:18789/');
+    result.status = isOnline ? 'online' : 'offline';
+  } catch {
+    result.status = 'offline';
+  }
+  
+  return result;
+}
+
+// Get voice server status
+async function getVoiceServerStatus(): Promise<{ service: ServiceStatus; metrics: VoiceServerMetrics }> {
+  const service: ServiceStatus = {
+    name: 'Voice Server',
+    status: 'unknown',
+    lastCheck: new Date().toISOString(),
+    details: 'Port 6060'
+  };
+  
+  const metrics: VoiceServerMetrics = {
+    status: 'unknown',
+    activeCalls: 0,
+    totalCalls: 0
+  };
+  
+  try {
+    const isOnline = await checkService('http://127.0.0.1:6060/');
+    if (isOnline) {
+      service.status = 'online';
+      metrics.status = 'online';
+      service.details = 'Port 6060 — Ready';
+    } else {
+      service.status = 'offline';
+      metrics.status = 'offline';
+    }
+  } catch {
+    service.status = 'offline';
+    metrics.status = 'offline';
+  }
+  
+  return { service, metrics };
+}
+
+// Get file server status (Mission Control live API)
+async function getFileServerStatus(): Promise<ServiceStatus> {
+  const result: ServiceStatus = {
+    name: 'File Server',
+    status: 'unknown',
+    lastCheck: new Date().toISOString(),
+    details: 'Port 3456'
+  };
+  
+  try {
+    const isOnline = await checkService('http://127.0.0.1:3456/');
+    result.status = isOnline ? 'online' : 'offline';
+  } catch {
+    result.status = 'offline';
+  }
+  
+  return result;
+}
+
+// Get browser proxy status
+async function getBrowserProxyStatus(): Promise<ServiceStatus> {
+  const result: ServiceStatus = {
+    name: 'Browser Proxy',
+    status: 'unknown',
+    lastCheck: new Date().toISOString(),
+    details: 'Port 18800'
+  };
+  
+  try {
+    const isOnline = await checkService('http://127.0.0.1:18800/json/version');
+    result.status = isOnline ? 'online' : 'offline';
+  } catch {
+    result.status = 'offline';
+  }
+  
+  return result;
+}
+
+// Get all service statuses
+async function getAllServices(): Promise<{ services: ServiceStatus[]; voiceMetrics: VoiceServerMetrics }> {
+  const [gateway, voiceResult, fileServer, browserProxy] = await Promise.all([
+    getGatewayStatus(),
+    getVoiceServerStatus(),
+    getFileServerStatus(),
+    getBrowserProxyStatus()
+  ]);
+  
+  return {
+    services: [gateway, voiceResult.service, fileServer, browserProxy],
+    voiceMetrics: voiceResult.metrics
+  };
+}
 
 const SOURCE_DIR = '/Users/henry_notabot/clawd';
 const MEMORY_DIR = path.join(SOURCE_DIR, 'memory');
@@ -347,9 +489,17 @@ export async function GET(request: NextRequest) {
     if (section === 'context') {
       return NextResponse.json(getContextUsage());
     }
+    if (section === 'services') {
+      const { services, voiceMetrics } = await getAllServices();
+      return NextResponse.json({ services, voiceMetrics });
+    }
     
-    // Return all sections
+    // Return all sections (including live service checks)
+    const { services, voiceMetrics } = await getAllServices();
+    
     return NextResponse.json({
+      services,
+      voiceMetrics,
       telegram: getTelegramDumps(),
       memory: getMemorySystemInfo(),
       heartbeat: getHeartbeatHealth(),

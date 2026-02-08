@@ -1,10 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { 
   Zap, CheckSquare, Brain, Camera, FileText, 
-  Settings, Target, LogOut, DollarSign, LucideIcon
+  Settings, Target, LogOut, DollarSign, LucideIcon, Menu, X
 } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 
@@ -37,9 +37,11 @@ interface NavWrapperProps {
 export default function NavWrapper({ children, activeTab }: NavWrapperProps) {
   const router = useRouter();
   const { data: session } = useSession();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleTabClick = (path: string) => {
     router.push(path);
+    setMobileMenuOpen(false);
   };
 
   const handleSignOut = () => {
@@ -55,7 +57,16 @@ export default function NavWrapper({ children, activeTab }: NavWrapperProps) {
           <span className="nav-bar__logo-text">Mission Control</span>
         </div>
 
-        <div className="nav-bar__tabs">
+        {/* Mobile menu button */}
+        <button 
+          className="nav-bar__mobile-toggle"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+
+        <div className={`nav-bar__tabs ${mobileMenuOpen ? 'nav-bar__tabs--open' : ''}`}>
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -73,6 +84,12 @@ export default function NavWrapper({ children, activeTab }: NavWrapperProps) {
               </button>
             );
           })}
+          
+          {/* Mobile sign out */}
+          <button className="nav-tab nav-bar__mobile-signout" onClick={handleSignOut}>
+            <LogOut size={16} style={{ color: 'var(--red)' }} />
+            <span>Sign out</span>
+          </button>
         </div>
 
         <div className="nav-bar__actions">

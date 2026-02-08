@@ -7,6 +7,14 @@
 - **"Show me" is the test** — if Paul asks "show me" and I can't immediately produce verified output, I wasn't done
 - This is THE pattern that destroys trust. Code existing ≠ working. Sub-agent saying done ≠ done.
 
+## System Alert Protocol (2026-02-08) — ACT, DON'T OBSERVE
+- **System messages are ACTION ITEMS**, not informational
+- 🔴 Down alerts → Fix immediately, then message Paul confirming resolved
+- Token refresh crons → Run the command when it fires
+- Voice server → Check every heartbeat, auto-restart if down
+- Exec failed → Investigate, fix if possible, alert Paul if not
+- **Don't wait for Paul to notice** — if something's broken and I can fix it, fix it
+
 ## Critical Rules (2026-02-02) — STOP FORGETTING THESE
 - **Toodledo defaults:** ALWAYS set folder (pWorkflow 9975528) and priority (Med 1)
 - **Progress logging:** ALWAYS update BOTH TD task notes AND memory files

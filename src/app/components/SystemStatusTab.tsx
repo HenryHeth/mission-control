@@ -666,7 +666,7 @@ export default function SystemStatusTab() {
         name: 'Clawdbot Gateway',
         status: 'online',
         lastCheck: new Date(),
-        details: 'Port 3001',
+        details: 'Port 18789',
         url: 'http://localhost:3001'
       },
       {
@@ -878,40 +878,28 @@ export default function SystemStatusTab() {
 
   const fetchSystemStatus = useCallback(async () => {
     try {
-      // Try file-server API first
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`${LIVE_API_URL}/api/system`, { signal: controller.signal });
-      clearTimeout(timeout);
-      
+      // Fetch all data from our unified API endpoint
+      const res = await fetch('/api/system-status');
       if (res.ok) {
         const data = await res.json();
-        if (data.source === 'live' && data.services) {
-          // Update services from live data
-          const liveServices: ServiceStatus[] = data.services.map((s: { name: string; status: string; details?: string }) => ({
+        
+        // Update services from API (server-side checks)
+        if (data.services) {
+          const mappedServices: ServiceStatus[] = data.services.map((s: { name: string; status: string; lastCheck: string; details?: string }) => ({
             name: s.name,
             status: s.status as 'online' | 'offline' | 'degraded' | 'unknown',
-            lastCheck: new Date(),
-            details: s.details,
+            lastCheck: new Date(s.lastCheck),
+            details: s.details
           }));
-          setServices(prev => {
-            // Merge with existing services, preferring live data
-            const existing = prev.filter(s => !liveServices.find(ls => ls.name === s.name));
-            return [...liveServices, ...existing];
-          });
+          setServices(mappedServices);
         }
         
-        // Update VM stats if available
-        if (data.vm) {
-          // Could add VM stats display later
-          console.log('VM stats:', data.vm);
+        // Update voice metrics
+        if (data.voiceMetrics) {
+          setVoiceMetrics(data.voiceMetrics);
         }
-      }
-      
-      // Fallback to original API
-      const res2 = await fetch('/api/system-status');
-      if (res2.ok) {
-        const data = await res2.json();
+        
+        // Update other sections
         if (data.telegram) setTelegramDumps(data.telegram);
         if (data.heartbeat) setHeartbeatHealth(data.heartbeat);
         if (data.memory) setMemorySystem(data.memory);
@@ -923,66 +911,27 @@ export default function SystemStatusTab() {
   }, []);
 
   const checkLiveServices = useCallback(async () => {
-    const serviceChecks = [
-      { 
-        name: 'Clawdbot Gateway', 
-        urls: ['http://localhost:3001/health', 'http://localhost:3001', 'http://127.0.0.1:3001/health'],
-        details: 'Port 3001' 
-      },
-      { 
-        name: 'Voice Server', 
-        urls: ['http://localhost:6060/health', 'http://localhost:6060', 'http://127.0.0.1:6060'],
-        details: 'Port 6060' 
-      },
-      { 
-        name: 'File Server', 
-        urls: ['http://localhost:3456/health', 'http://localhost:3456/api/health', 'http://127.0.0.1:3456'],
-        details: 'Port 3456' 
-      },
-      { 
-        name: 'Browser Proxy', 
-        urls: ['http://localhost:18800/json/version', 'http://127.0.0.1:18800/json/version'],
-        details: 'Port 18800' 
-      },
-    ];
-
-    const results: ServiceStatus[] = [];
-
-    for (const svc of serviceChecks) {
-      let isOnline = false;
-      const statusDetails = svc.details;
-      
-      for (const url of svc.urls) {
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 2000);
-          await fetch(url, { 
-            signal: controller.signal,
-            mode: 'no-cors'
-          });
-          clearTimeout(timeout);
-          isOnline = true;
-          break;
-        } catch {
-          continue;
+    // Fetch service status from our API (which runs on the server and can check localhost)
+    try {
+      const res = await fetch('/api/system-status?section=services');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.services) {
+          const mappedServices: ServiceStatus[] = data.services.map((s: { name: string; status: string; lastCheck: string; details?: string }) => ({
+            name: s.name,
+            status: s.status as 'online' | 'offline' | 'degraded' | 'unknown',
+            lastCheck: new Date(s.lastCheck),
+            details: s.details
+          }));
+          setServices(mappedServices);
+        }
+        if (data.voiceMetrics) {
+          setVoiceMetrics(data.voiceMetrics);
         }
       }
-      
-      results.push({
-        name: svc.name,
-        status: isOnline ? 'online' : 'offline',
-        lastCheck: new Date(),
-        details: statusDetails
-      });
+    } catch (e) {
+      console.error('Failed to fetch service status:', e);
     }
-
-    setServices(results);
-    
-    const voiceOnline = results.find(s => s.name === 'Voice Server')?.status === 'online';
-    setVoiceMetrics(prev => ({
-      ...prev,
-      status: voiceOnline ? 'online' : 'offline'
-    }));
   }, []);
 
   useEffect(() => {
