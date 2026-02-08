@@ -6,7 +6,7 @@ import {
   CheckCircle2, XCircle, Phone, Calendar, MessageSquare, 
   Heart, Activity, Terminal, RefreshCw, Server
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+// date-fns removed - using static values
 
 /* Option 1: Horizontal Services + Compact Grid */
 
