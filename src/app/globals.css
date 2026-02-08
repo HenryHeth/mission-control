@@ -1890,8 +1890,8 @@ body {
 }
 
 .system-status__card--services { grid-column: span 6; }
-.system-status__card--voice { grid-column: span 6; }
-.system-status__card--cron { grid-column: span 7; }
+.system-status__card--voice { grid-column: span 3; }
+.system-status__card--cron { grid-column: span 3; }
 .system-status__card--agents { grid-column: span 5; }
 
 .system-status__card-header {
@@ -1928,8 +1928,8 @@ body {
 
 /* ── Service Cards ── */
 .services-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
@@ -3681,7 +3681,7 @@ body {
 .system-status__card--heartbeat,
 .system-status__card--memory-system,
 .system-status__card--context {
-  grid-column: span 1;
+  grid-column: span 3;
 }
 
 .telegram-dumps-info {
