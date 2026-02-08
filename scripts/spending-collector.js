@@ -290,6 +290,7 @@ async function collectSpendingData(verbose = false) {
   
   const results = {
     collectedAt: timestamp,
+    source: 'live',
     providers: {}
   };
   
