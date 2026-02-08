@@ -1,182 +1,106 @@
 'use client';
 
+import NavWrapper from '../components/NavWrapper';
 import { useState, useEffect } from 'react';
-import { 
-  CheckCircle2, Phone, Calendar, MessageSquare, 
-  Heart, Activity, Terminal, Server, Zap
-} from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Server, Phone, Activity, Heart, Zap, Calendar, Terminal, Database } from 'lucide-react';
 
-/* ═══════════════════════════════════════════════════════
-   System Layout Option 2: Big Stats Bar + Detail Cards
-   - Hero stats row with large numbers
-   - Detail cards below in 3-column grid
-   ═══════════════════════════════════════════════════════ */
+/* Option 2: Big Stats Bar + Detail Cards */
 
 export default function System2Page() {
-  const [data, setData] = useState<{
-    servicesOnline: number;
-    totalServices: number;
-    activeCalls: number;
-    contextPercent: number;
-    heartbeatAge: string;
-    lastDump: string;
-  } | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch('/api/system-status');
-        if (res.ok) {
-          const d = await res.json();
-          const online = d.services?.filter((s: { status: string }) => s.status === 'online').length || 4;
-          setData({
-            servicesOnline: online,
-            totalServices: d.services?.length || 4,
-            activeCalls: 0,
-            contextPercent: d.contextUsage?.percentUsed || 22,
-            heartbeatAge: d.heartbeatHealth?.lastHeartbeat || new Date().toISOString(),
-            lastDump: d.telegramDumps?.lastDump?.lastModified || new Date().toISOString(),
-          });
-        }
-      } catch (e) { console.error(e); }
-      setLoading(false);
-    }
-    fetchData();
-  }, []);
-
-  if (loading) return <div style={styles.loading}>Loading...</div>;
-
-  const stats = data || {
-    servicesOnline: 4, totalServices: 4, activeCalls: 0,
-    contextPercent: 22, heartbeatAge: new Date().toISOString(),
-    lastDump: new Date().toISOString()
-  };
+  useEffect(() => { setTimeout(() => setLoading(false), 300); }, []);
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>⚡ System Status - Option 2</h1>
-        <span style={styles.badge}>Stats Bar Layout</span>
-      </div>
+    <NavWrapper activeTab="system2">
+      <div style={styles.container}>
+        <div style={styles.header}>
+          <h1 style={styles.title}>System Status</h1>
+          <span style={styles.badge}>Option 2: Stats Bar</span>
+        </div>
 
-      {/* Big Stats Bar */}
-      <div style={styles.statsBar}>
-        <div style={styles.statItem}>
-          <Server size={32} color="#10B981" />
-          <div style={styles.statNumber}>{stats.servicesOnline}/{stats.totalServices}</div>
-          <div style={styles.statLabel}>Services Online</div>
-        </div>
-        <div style={styles.statItem}>
-          <Phone size={32} color="#38BDF8" />
-          <div style={styles.statNumber}>{stats.activeCalls}</div>
-          <div style={styles.statLabel}>Active Calls</div>
-        </div>
-        <div style={styles.statItem}>
-          <Activity size={32} color="#FBBF24" />
-          <div style={styles.statNumber}>{stats.contextPercent}%</div>
-          <div style={styles.statLabel}>Context Used</div>
-        </div>
-        <div style={styles.statItem}>
-          <Heart size={32} color="#F87171" />
-          <div style={styles.statNumber}>{formatDistanceToNow(new Date(stats.heartbeatAge)).replace(' ago', '').replace('about ', '')}</div>
-          <div style={styles.statLabel}>Since Heartbeat</div>
-        </div>
-        <div style={styles.statItem}>
-          <Zap size={32} color="#A78BFA" />
-          <div style={styles.statNumber}>0</div>
-          <div style={styles.statLabel}>Sub-Agents</div>
-        </div>
-      </div>
-
-      {/* 3-Column Detail Grid */}
-      <div style={styles.grid3}>
-        {/* Services Detail */}
-        <div style={styles.card}>
-          <div style={styles.cardTitle}><Server size={18} /> Services</div>
-          {['Clawdbot Gateway', 'Voice Server', 'File Server', 'Browser Proxy'].map(name => (
-            <div key={name} style={styles.serviceRow}>
-              <CheckCircle2 size={14} color="#10B981" />
-              <span style={styles.serviceRowName}>{name}</span>
-              <span style={styles.onlineBadge}>ONLINE</span>
+        {loading ? <div style={styles.loading}>Loading...</div> : (
+          <>
+            {/* Big Stats Bar */}
+            <div style={styles.statsBar}>
+              <div style={styles.stat}>
+                <Server size={28} color="#10B981" />
+                <div style={styles.statNum}>4/4</div>
+                <div style={styles.statLbl}>Services</div>
+              </div>
+              <div style={styles.stat}>
+                <Phone size={28} color="#38BDF8" />
+                <div style={styles.statNum}>0</div>
+                <div style={styles.statLbl}>Calls</div>
+              </div>
+              <div style={styles.stat}>
+                <Activity size={28} color="#FBBF24" />
+                <div style={styles.statNum}>22%</div>
+                <div style={styles.statLbl}>Context</div>
+              </div>
+              <div style={styles.stat}>
+                <Heart size={28} color="#F87171" />
+                <div style={styles.statNum}>2h</div>
+                <div style={styles.statLbl}>Heartbeat</div>
+              </div>
+              <div style={styles.stat}>
+                <Zap size={28} color="#A78BFA" />
+                <div style={styles.statNum}>0</div>
+                <div style={styles.statLbl}>Agents</div>
+              </div>
             </div>
-          ))}
-        </div>
 
-        {/* Scheduled Jobs */}
-        <div style={styles.card}>
-          <div style={styles.cardTitle}><Calendar size={18} /> Scheduled Jobs</div>
-          {[
-            { name: 'Morning Briefing', next: '12h' },
-            { name: 'Heartbeat Check', next: '15m' },
-            { name: 'Email Digest', next: '4h' },
-          ].map(job => (
-            <div key={job.name} style={styles.jobRow}>
-              <span>{job.name}</span>
-              <span style={styles.nextTime}>Next: {job.next}</span>
+            {/* 3-Column Grid */}
+            <div style={styles.grid3}>
+              <div style={styles.card}>
+                <div style={styles.cardTitle}><Server size={16} /> Services</div>
+                {['Gateway :18789', 'Voice :6060', 'Files :3456', 'Browser :18800'].map(s => (
+                  <div key={s} style={styles.row}><span style={styles.dot} />{s}</div>
+                ))}
+              </div>
+              <div style={styles.card}>
+                <div style={styles.cardTitle}><Calendar size={16} /> Scheduled</div>
+                <div style={styles.row}>Morning Briefing <span style={styles.dim}>12h</span></div>
+                <div style={styles.row}>Heartbeat Check <span style={styles.dim}>15m</span></div>
+                <div style={styles.row}>Email Digest <span style={styles.dim}>4h</span></div>
+              </div>
+              <div style={styles.card}>
+                <div style={styles.cardTitle}><Database size={16} /> Memory</div>
+                <div style={styles.row}>MEMORY.md <span style={styles.green}>16.7 KB</span></div>
+                <div style={styles.row}>Telegram <span style={styles.green}>2.9 KB</span></div>
+                <div style={styles.row}>Context <span style={styles.green}>45k/200k</span></div>
+              </div>
             </div>
-          ))}
-        </div>
 
-        {/* Memory & Dumps */}
-        <div style={styles.card}>
-          <div style={styles.cardTitle}><MessageSquare size={18} /> Data Flow</div>
-          <div style={styles.dataRow}>
-            <span>MEMORY.md</span>
-            <span style={styles.dataValue}>16.7 KB</span>
-          </div>
-          <div style={styles.dataRow}>
-            <span>Telegram Dumps</span>
-            <span style={styles.dataValue}>2.9 KB today</span>
-          </div>
-          <div style={styles.dataRow}>
-            <span>Context Tokens</span>
-            <span style={styles.dataValue}>45k / 200k</span>
-          </div>
-        </div>
+            {/* Timeline */}
+            <div style={styles.card}>
+              <div style={styles.cardTitle}><Terminal size={16} /> Sub-Agent Timeline</div>
+              <div style={styles.empty}>No active sub-agents</div>
+            </div>
+          </>
+        )}
       </div>
-
-      {/* Sub-Agent Timeline */}
-      <div style={styles.fullCard}>
-        <div style={styles.cardTitle}><Terminal size={18} /> Sub-Agent Timeline</div>
-        <div style={styles.emptyState}>No sub-agents active today</div>
-      </div>
-    </div>
+    </NavWrapper>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
   container: { padding: 24, background: '#0F172A', minHeight: '100vh', color: '#F1F5F9' },
-  loading: { padding: 48, textAlign: 'center', color: '#64748B' },
+  loading: { textAlign: 'center', padding: 48, color: '#64748B' },
   header: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 },
-  title: { fontSize: '1.5rem', fontWeight: 700 },
-  badge: { background: '#38BDF8', color: 'white', padding: '4px 12px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 700 },
+  title: { fontSize: '1.4rem', fontWeight: 700 },
+  badge: { background: '#38BDF8', padding: '4px 10px', borderRadius: 6, fontSize: '0.7rem', fontWeight: 700 },
 
-  statsBar: { 
-    display: 'flex', justifyContent: 'space-between', 
-    background: 'linear-gradient(135deg, #1E293B 0%, #0F172A 100%)',
-    borderRadius: 16, padding: 24, marginBottom: 24,
-    border: '1px solid #334155'
-  },
-  statItem: { textAlign: 'center', flex: 1 },
-  statNumber: { fontSize: '2.5rem', fontWeight: 700, color: '#F1F5F9', marginTop: 8 },
-  statLabel: { fontSize: '0.8rem', color: '#64748B', marginTop: 4, fontWeight: 600 },
+  statsBar: { display: 'flex', justifyContent: 'space-around', background: '#1E293B', borderRadius: 12, padding: 24, marginBottom: 20 },
+  stat: { textAlign: 'center' },
+  statNum: { fontSize: '2rem', fontWeight: 700, marginTop: 8 },
+  statLbl: { fontSize: '0.75rem', color: '#64748B', marginTop: 4 },
 
-  grid3: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 },
-  card: { background: '#1E293B', borderRadius: 12, padding: 16, border: '1px solid #334155' },
-  cardTitle: { display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', fontWeight: 700, marginBottom: 16, color: '#F1F5F9' },
-
-  serviceRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #334155' },
-  serviceRowName: { flex: 1, fontSize: '0.85rem' },
-  onlineBadge: { background: '#10B981', color: 'white', padding: '2px 6px', borderRadius: 4, fontSize: '0.6rem', fontWeight: 700 },
-
-  jobRow: { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #334155', fontSize: '0.9rem' },
-  nextTime: { color: '#64748B', fontSize: '0.8rem' },
-
-  dataRow: { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #334155' },
-  dataValue: { color: '#10B981', fontWeight: 600 },
-
-  fullCard: { background: '#1E293B', borderRadius: 12, padding: 16, border: '1px solid #334155' },
-  emptyState: { textAlign: 'center', padding: 32, color: '#64748B' },
+  grid3: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 },
+  card: { background: '#1E293B', borderRadius: 10, padding: 16 },
+  cardTitle: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 12, color: '#94A3B8' },
+  row: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #334155', fontSize: '0.9rem' },
+  dot: { width: 8, height: 8, borderRadius: '50%', background: '#10B981', marginRight: 8, display: 'inline-block' },
+  dim: { color: '#64748B', fontSize: '0.8rem' },
+  green: { color: '#10B981', fontWeight: 600 },
+  empty: { textAlign: 'center', padding: 24, color: '#64748B' },
 };
