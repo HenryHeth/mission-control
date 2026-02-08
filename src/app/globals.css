@@ -1889,9 +1889,9 @@ body {
   overflow: hidden;
 }
 
-.system-status__card--services { grid-column: span 4; }
-.system-status__card--voice { grid-column: span 4; }
-.system-status__card--cron { grid-column: span 4; }
+.system-status__card--services { grid-column: span 3; }
+.system-status__card--voice { grid-column: span 3; }
+.system-status__card--cron { grid-column: span 6; }
 .system-status__card--agents { grid-column: span 5; }
 
 .system-status__card-header {
