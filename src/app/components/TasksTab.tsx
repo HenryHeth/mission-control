@@ -255,7 +255,7 @@ export default function TasksTab() {
       const retired = data.completed.filter(t => t.completed >= startTs && t.completed < endTs).length;
 
       weeks.push({
-        week: format(weekStart, 'MMM d'),
+        week: format(weekEnd, 'MMM d'),
         created,
         retired
       });

@@ -1889,9 +1889,9 @@ body {
   overflow: hidden;
 }
 
-.system-status__card--services { grid-column: span 6; }
-.system-status__card--voice { grid-column: span 6; }
-.system-status__card--cron { grid-column: span 7; }
+.system-status__card--services { grid-column: span 4; }
+.system-status__card--voice { grid-column: span 4; }
+.system-status__card--cron { grid-column: span 4; }
 .system-status__card--agents { grid-column: span 5; }
 
 .system-status__card-header {
@@ -3681,7 +3681,7 @@ body {
 .system-status__card--heartbeat,
 .system-status__card--memory-system,
 .system-status__card--context {
-  grid-column: span 1;
+  grid-column: span 3;
 }
 
 .telegram-dumps-info {
