@@ -1889,12 +1889,10 @@ body {
   overflow: hidden;
 }
 
-.system-status__card--services { grid-column: span 12; }
-.system-status__card--voice { grid-column: span 4; }
-.system-status__card--cron { grid-column: span 8; }
+.system-status__card--services { grid-column: span 6; }
+.system-status__card--voice { grid-column: span 6; }
+.system-status__card--cron { grid-column: span 7; }
 .system-status__card--agents { grid-column: span 5; }
-
-/* Removed duplicate - see services-list below */
 
 .system-status__card-header {
   display: flex;
@@ -1929,29 +1927,26 @@ body {
 }
 
 /* ── Service Cards ── */
-/* Services grid - 4 columns horizontal */
 .services-list {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .service-card {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 8px;
-  padding: 16px 12px;
+  gap: 10px;
+  padding: 10px 12px;
   background: var(--bg-subtle);
   border-radius: var(--radius);
-  border-bottom: 3px solid;
+  border-left: 3px solid;
 }
 
-.service-card--online { border-bottom-color: var(--emerald); }
-.service-card--offline { border-bottom-color: var(--red); }
-.service-card--degraded { border-bottom-color: var(--amber); }
-.service-card--unknown { border-bottom-color: var(--text-dim); }
+.service-card--online { border-left-color: var(--emerald); }
+.service-card--offline { border-left-color: var(--red); }
+.service-card--degraded { border-left-color: var(--amber); }
+.service-card--unknown { border-left-color: var(--text-dim); }
 
 .service-card__icon {
   flex-shrink: 0;
@@ -3682,10 +3677,12 @@ body {
    ═══════════════════════════════════════════════════════ */
 
 /* ── Telegram Dumps ── */
-.system-status__card--telegram { grid-column: span 2; }
-.system-status__card--heartbeat { grid-column: span 3; }
-.system-status__card--memory-system { grid-column: span 4; }
-.system-status__card--context { grid-column: span 3; }
+.system-status__card--telegram,
+.system-status__card--heartbeat,
+.system-status__card--memory-system,
+.system-status__card--context {
+  grid-column: span 1;
+}
 
 .telegram-dumps-info {
   display: flex;

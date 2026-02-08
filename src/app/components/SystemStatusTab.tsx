@@ -995,8 +995,6 @@ export default function SystemStatusTab() {
       </div>
 
       <div className="system-status__grid">
-        {/* Row 1: Services, Voice, Scheduled Jobs */}
-        
         {/* Services */}
         <div className="system-status__card system-status__card--services">
           <div className="system-status__card-header">
@@ -1015,6 +1013,18 @@ export default function SystemStatusTab() {
           <VoiceServerCard metrics={voiceMetrics} />
         </div>
 
+        {/* Telegram Dumps */}
+        {telegramDumps && <TelegramDumpsCard data={telegramDumps} />}
+
+        {/* Heartbeat Health */}
+        {heartbeatHealth && <HeartbeatHealthCard data={heartbeatHealth} />}
+
+        {/* Memory System (Flow Diagram) */}
+        {memorySystem && <MemorySystemCard data={memorySystem} />}
+
+        {/* Context Usage (Compaction Countdown) */}
+        {contextUsage && <ContextUsageCard data={contextUsage} />}
+
         {/* Cron Jobs */}
         <div className="system-status__card system-status__card--cron">
           <div className="system-status__card-header">
@@ -1028,21 +1038,7 @@ export default function SystemStatusTab() {
           </div>
         </div>
 
-        {/* Row 2: Telegram, Heartbeat, Memory, Context */}
-        
-        {/* Telegram Dumps */}
-        {telegramDumps && <TelegramDumpsCard data={telegramDumps} />}
-
-        {/* Heartbeat Health */}
-        {heartbeatHealth && <HeartbeatHealthCard data={heartbeatHealth} />}
-
-        {/* Memory System (Flow Diagram) */}
-        {memorySystem && <MemorySystemCard data={memorySystem} />}
-
-        {/* Context Usage (Compaction Countdown) */}
-        {contextUsage && <ContextUsageCard data={contextUsage} />}
-
-        {/* Row 3: Sub-Agent Timeline - Full Width */}
+        {/* Sub-Agent Timeline - Full Width */}
         <div className="system-status__card system-status__card--timeline">
           <div className="system-status__card-header">
             <Terminal size={18} style={{ color: 'var(--emerald)' }} />
