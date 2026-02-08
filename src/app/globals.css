@@ -2162,6 +2162,12 @@ body {
   .system-status__grid > * { grid-column: span 12 !important; }
   
   .voice-server-card__stats { flex-wrap: wrap; gap: 16px; }
+  
+  .service-card { padding: 12px; }
+  .service-card__name { font-size: 1rem; }
+  .service-card__details { font-size: 0.85rem; }
+  
+  .system-status__card-header h2 { font-size: 1rem; }
 }
 
 /* ═══════════════════════════════════════════════════════
