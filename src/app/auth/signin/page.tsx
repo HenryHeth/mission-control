@@ -2,12 +2,21 @@
 
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 
 function SignInContent() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
   const error = searchParams.get("error");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLocalLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    await signIn("credentials", { password, callbackUrl });
+    setLoading(false);
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -21,9 +30,39 @@ function SignInContent() {
           <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded mb-6">
             {error === "AccessDenied" 
               ? "Access denied. Your email is not authorized."
+              : error === "CredentialsSignin"
+              ? "Invalid password."
               : "An error occurred during sign in."}
           </div>
         )}
+
+        {/* Local Login */}
+        <form onSubmit={handleLocalLogin} className="mb-6">
+          <label className="block text-gray-300 text-sm mb-2">Local Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter password"
+            className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-600"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-gray-800 text-gray-400">or</span>
+          </div>
+        </div>
 
         <button
           onClick={() => signIn("google", { callbackUrl })}
@@ -51,7 +90,7 @@ function SignInContent() {
         </button>
 
         <p className="mt-6 text-center text-gray-500 text-sm">
-          Only authorized users can access this application.
+          Local password: ask Henry
         </p>
       </div>
     </div>
