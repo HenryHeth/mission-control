@@ -378,6 +378,9 @@ function getMemorySystemInfo(): MemorySystemInfo {
   return result;
 }
 
+const GATEWAY_LOG = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'gateway.log');
+const HEARTBEAT_STATE = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'heartbeat-monitor-state.json');
+
 function getHeartbeatHealth(): HeartbeatHealthInfo {
   const result: HeartbeatHealthInfo = {
     config: null,
@@ -396,32 +399,50 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
       }
     }
     
-    // For now, we'll generate synthetic heartbeat data
-    // In production, this would read from gateway logs or a state file
+    // Read real heartbeat data from gateway logs
     const now = new Date();
-    const intervalMs = 30 * 60 * 1000; // 30 minutes
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
-    // Generate 48 entries (24 hours)
-    for (let i = 0; i < 48; i++) {
-      const time = new Date(now.getTime() - i * intervalMs);
-      const hour = time.getHours();
+    if (fs.existsSync(GATEWAY_LOG)) {
+      const logContent = fs.readFileSync(GATEWAY_LOG, 'utf8');
+      const lines = logContent.split('\n');
       
-      // Check if within active hours (7:00 - 00:00)
-      const isActiveHour = hour >= 7 || hour === 0;
+      // Parse heartbeat entries from last 24h
+      const heartbeats: { time: string; ok: boolean }[] = [];
+      for (const line of lines) {
+        if (line.includes('[heartbeat] started')) {
+          const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)/);
+          if (match) {
+            const timestamp = new Date(match[1]);
+            if (timestamp >= twentyFourHoursAgo) {
+              heartbeats.push({ time: match[1], ok: true });
+            }
+          }
+        }
+      }
       
-      result.history24h.push({
-        time: time.toISOString(),
-        ok: isActiveHour ? Math.random() > 0.05 : false // 95% success during active hours
-      });
+      result.history24h = heartbeats.reverse(); // Most recent first
     }
     
-    // Most recent heartbeat
-    const lastOk = result.history24h.find(h => h.ok);
-    if (lastOk) {
-      result.lastHeartbeat = lastOk.time;
-      
+    // Also check heartbeat monitor state file for last heartbeat
+    if (fs.existsSync(HEARTBEAT_STATE)) {
+      try {
+        const state = JSON.parse(fs.readFileSync(HEARTBEAT_STATE, 'utf8'));
+        if (state.lastHeartbeatTime) {
+          result.lastHeartbeat = state.lastHeartbeatTime;
+        }
+      } catch {}
+    }
+    
+    // If no state file, use most recent from history
+    if (!result.lastHeartbeat && result.history24h.length > 0) {
+      result.lastHeartbeat = result.history24h[0].time;
+    }
+    
+    // Determine health status
+    if (result.lastHeartbeat) {
       // Check if stale (>45 minutes since last heartbeat during active hours)
-      const lastTime = new Date(lastOk.time);
+      const lastTime = new Date(result.lastHeartbeat);
       const minutesAgo = (now.getTime() - lastTime.getTime()) / 60000;
       const currentHour = now.getHours();
       const isActiveNow = currentHour >= 7 || currentHour === 0;
