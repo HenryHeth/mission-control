@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 
-type Tab = 'dashboard' | 'tasks' | 'memory' | 'captures' | 'docs' | 'vvo' | 'system' | 'spending' | 'system1' | 'system2' | 'system3';
+type Tab = 'dashboard' | 'tasks' | 'memory' | 'captures' | 'docs' | 'vvo' | 'system' | 'spending';
 
 interface TabConfig {
   id: Tab;
@@ -27,9 +27,6 @@ const tabs: TabConfig[] = [
   { id: 'docs', name: 'Docs', icon: FileText, path: '/docs', color: 'var(--text-muted)' },
   { id: 'spending', name: 'Spending', icon: DollarSign, path: '/spending', color: 'var(--amber)' },
   { id: 'system', name: 'System', icon: Settings, path: '/system', color: 'var(--sky)' },
-  { id: 'system1', name: 'Sys1', icon: Settings, path: '/system1', color: 'var(--emerald)' },
-  { id: 'system2', name: 'Sys2', icon: Settings, path: '/system2', color: 'var(--amber)' },
-  { id: 'system3', name: 'Sys3', icon: Settings, path: '/system3', color: 'var(--sky)' },
 ];
 
 interface NavWrapperProps {
