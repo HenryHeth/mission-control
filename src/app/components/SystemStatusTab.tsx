@@ -156,20 +156,29 @@ function formatBytes(bytes: number): string {
 }
 
 function ServiceCard({ service }: { service: ServiceStatus }) {
-  const dotColor = service.status === 'online' ? 'var(--emerald)' 
-    : service.status === 'offline' ? 'var(--red)' 
-    : service.status === 'degraded' ? 'var(--amber)' 
-    : '#64748B';
-  
-  // Extract short name and port from details
-  const shortName = service.name.replace('Clawdbot ', '').replace(' Server', '').replace(' Proxy', '');
-  const port = service.details?.match(/:?(\d{4,5})/)?.[1] || '';
+  const statusIcon = service.status === 'online' ? (
+    <CheckCircle2 size={16} style={{ color: 'var(--emerald)' }} />
+  ) : service.status === 'offline' ? (
+    <XCircle size={16} style={{ color: 'var(--red)' }} />
+  ) : service.status === 'degraded' ? (
+    <AlertTriangle size={16} style={{ color: 'var(--amber)' }} />
+  ) : (
+    <Activity size={16} style={{ color: '#64748B' }} />
+  );
 
   return (
-    <div className="service-card-compact">
-      <span className="service-dot" style={{ background: dotColor }} />
-      <span className="service-name-compact">{shortName}</span>
-      <span className="service-port-compact">:{port}</span>
+    <div className={`service-card service-card--${service.status}`}>
+      <div className="service-card__icon">{statusIcon}</div>
+      <div className="service-card__info">
+        <div className="service-card__name">{service.name}</div>
+        {service.details && (
+          <div className="service-card__details">{service.details}</div>
+        )}
+        <div className="service-card__meta">
+          Checked {formatDistanceToNow(service.lastCheck, { addSuffix: true })}
+        </div>
+      </div>
+      <StatusBadge status={service.status} />
     </div>
   );
 }
@@ -996,9 +1005,6 @@ export default function SystemStatusTab() {
             {services.map(service => (
               <ServiceCard key={service.name} service={service} />
             ))}
-          </div>
-          <div className="services-summary">
-            {services.filter(s => s.status === 'online').length}/{services.length} Online
           </div>
         </div>
 
