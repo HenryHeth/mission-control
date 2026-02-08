@@ -45,7 +45,18 @@ function loadConfig() {
     if (fs.existsSync(clawdbotPath)) {
       const clawdbot = JSON.parse(fs.readFileSync(clawdbotPath, 'utf8'));
       
-      // Extract API keys from providers
+      // Extract API keys from env.vars (primary location)
+      if (clawdbot.env && clawdbot.env.vars) {
+        const vars = clawdbot.env.vars;
+        config.anthropic = config.anthropic || vars.ANTHROPIC_API_KEY;
+        config.openai = config.openai || vars.OPENAI_API_KEY;
+        config.openrouter = config.openrouter || vars.OPENROUTER_API_KEY;
+        config.twilio.sid = config.twilio.sid || vars.TWILIO_ACCOUNT_SID;
+        config.twilio.token = config.twilio.token || vars.TWILIO_AUTH_TOKEN;
+        config.elevenlabs = config.elevenlabs || vars.ELEVENLABS_API_KEY;
+      }
+      
+      // Fallback: Extract API keys from providers
       if (clawdbot.providers) {
         for (const [key, provider] of Object.entries(clawdbot.providers)) {
           if (provider.apiKey) {
@@ -58,12 +69,29 @@ function loadConfig() {
       
       // Check plugins for Twilio/ElevenLabs
       if (clawdbot.plugins) {
+        // Legacy plugin format
         if (clawdbot.plugins.twilio) {
           config.twilio.sid = config.twilio.sid || clawdbot.plugins.twilio.accountSid;
           config.twilio.token = config.twilio.token || clawdbot.plugins.twilio.authToken;
         }
         if (clawdbot.plugins.sag) {
           config.elevenlabs = config.elevenlabs || clawdbot.plugins.sag.apiKey;
+        }
+        
+        // New plugins.entries format
+        if (clawdbot.plugins.entries) {
+          const voiceCall = clawdbot.plugins.entries['voice-call'];
+          if (voiceCall && voiceCall.config) {
+            // Twilio creds
+            if (voiceCall.config.twilio) {
+              config.twilio.sid = config.twilio.sid || voiceCall.config.twilio.accountSid;
+              config.twilio.token = config.twilio.token || voiceCall.config.twilio.authToken;
+            }
+            // ElevenLabs in TTS config
+            if (voiceCall.config.tts && voiceCall.config.tts.elevenlabs) {
+              config.elevenlabs = config.elevenlabs || voiceCall.config.tts.elevenlabs.apiKey;
+            }
+          }
         }
       }
     }

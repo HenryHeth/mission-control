@@ -224,22 +224,43 @@ export default function DashboardTab() {
     // Try live API first
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000);
+      const timeout = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(`${LIVE_API_URL}/api/dashboard`, { signal: controller.signal });
       clearTimeout(timeout);
       
       if (res.ok) {
         const data = await res.json();
-        if (data.metrics) {
-          // Use live data...
+        if (data.source === 'live') {
+          // Use live task data
+          if (data.tasks) {
+            setTaskSummary({
+              dueToday: data.tasks.dueToday || 0,
+              overdue: data.tasks.overdue || 0,
+              completedToday: data.tasks.completedToday || 0,
+              completedWeek: data.tasks.completedWeek || 0,
+            });
+          }
+          
+          // Use live weather data for productivity pulse visual
+          if (data.weather?.available) {
+            // Use temperature as a fun productivity indicator
+            setProductivityPulse(Math.min(100, Math.max(20, data.weather.temp_c * 4 + 40)));
+          }
+          
+          // Store calendar data for potential future use
+          // (Could add calendar section later)
+          
+          // Generate sample metrics for now (RescueTime integration needed later)
+          generateSampleMetricsOnly();
+          
           setDataSource('live');
           setLoading(false);
           setLastUpdated(new Date());
           return;
         }
       }
-    } catch {
-      // Fall through to sample
+    } catch (err) {
+      console.warn('Dashboard API failed:', err);
     }
     
     // Use sample data
@@ -247,6 +268,66 @@ export default function DashboardTab() {
     setDataSource('sample');
     setLoading(false);
     setLastUpdated(new Date());
+  };
+
+  // Generate only metrics (for when task data is live)
+  const generateSampleMetricsOnly = () => {
+    const now = new Date();
+    const sitting: DailySitting[] = [];
+    let totalDesk = 0;
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = subDays(now, i);
+      const dayDesk = 3 + Math.random() * 5;
+      sitting.push({
+        date: format(d, 'yyyy-MM-dd'),
+        label: format(d, 'EEE'),
+        hours: dayDesk
+      });
+      totalDesk += dayDesk;
+    }
+    
+    setSittingData(sitting);
+    
+    const avgDesk = totalDesk / 7;
+    
+    const newMetrics: MetricData[] = [
+      {
+        label: 'DESK',
+        value: avgDesk,
+        goal: 4,
+        unit: 'h/d',
+        color: 'var(--amber)',
+        icon: <Monitor size={16} />,
+        trend: -5
+      },
+      {
+        label: 'COMPUTER',
+        value: 2.5 + Math.random() * 3,
+        unit: 'h/d',
+        color: 'var(--sky)',
+        icon: <Monitor size={16} />,
+        trend: 12
+      },
+      {
+        label: 'MOBILE',
+        value: 1.5 + Math.random() * 2,
+        unit: 'h/d',
+        color: 'var(--emerald)',
+        icon: <Smartphone size={16} />,
+        trend: -8
+      },
+      {
+        label: 'YOUTUBE',
+        value: 0.3 + Math.random() * 1.2,
+        unit: 'h/d',
+        color: 'var(--red)',
+        icon: <Youtube size={16} />,
+        trend: 25
+      }
+    ];
+    
+    setMetrics(newMetrics);
   };
 
   useEffect(() => {

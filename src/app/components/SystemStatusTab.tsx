@@ -16,6 +16,8 @@ import { format, formatDistanceToNow, differenceInSeconds, differenceInMinutes, 
    Heartbeat Health, Memory System, Context Usage
    ═══════════════════════════════════════════════════════ */
 
+const LIVE_API_URL = process.env.NEXT_PUBLIC_LIVE_API_URL || 'http://localhost:3456';
+
 interface ServiceStatus {
   name: string;
   status: 'online' | 'offline' | 'degraded' | 'unknown';
@@ -876,9 +878,40 @@ export default function SystemStatusTab() {
 
   const fetchSystemStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/system-status');
+      // Try file-server API first
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`${LIVE_API_URL}/api/system`, { signal: controller.signal });
+      clearTimeout(timeout);
+      
       if (res.ok) {
         const data = await res.json();
+        if (data.source === 'live' && data.services) {
+          // Update services from live data
+          const liveServices: ServiceStatus[] = data.services.map((s: { name: string; status: string; details?: string }) => ({
+            name: s.name,
+            status: s.status as 'online' | 'offline' | 'degraded' | 'unknown',
+            lastCheck: new Date(),
+            details: s.details,
+          }));
+          setServices(prev => {
+            // Merge with existing services, preferring live data
+            const existing = prev.filter(s => !liveServices.find(ls => ls.name === s.name));
+            return [...liveServices, ...existing];
+          });
+        }
+        
+        // Update VM stats if available
+        if (data.vm) {
+          // Could add VM stats display later
+          console.log('VM stats:', data.vm);
+        }
+      }
+      
+      // Fallback to original API
+      const res2 = await fetch('/api/system-status');
+      if (res2.ok) {
+        const data = await res2.json();
         if (data.telegram) setTelegramDumps(data.telegram);
         if (data.heartbeat) setHeartbeatHealth(data.heartbeat);
         if (data.memory) setMemorySystem(data.memory);

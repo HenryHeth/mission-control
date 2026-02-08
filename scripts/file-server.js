@@ -362,6 +362,176 @@ function generateSampleTaskData() {
   };
 }
 
+// Helper to run shell commands
+const { exec } = require('child_process');
+
+function runCommand(cmd, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    const child = exec(cmd, { timeout }, (err, stdout, stderr) => {
+      if (err) reject(err);
+      else resolve(stdout.trim());
+    });
+  });
+}
+
+// Fetch weather from wttr.in
+async function fetchWeather(location = 'Vancouver') {
+  try {
+    const https = require('https');
+    return new Promise((resolve) => {
+      const url = `https://wttr.in/${encodeURIComponent(location)}?format=j1`;
+      https.get(url, { timeout: 5000 }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const weather = JSON.parse(data);
+            const current = weather.current_condition?.[0];
+            resolve({
+              available: true,
+              location: weather.nearest_area?.[0]?.areaName?.[0]?.value || location,
+              temp_c: parseFloat(current?.temp_C || 0),
+              temp_f: parseFloat(current?.temp_F || 0),
+              feels_like_c: parseFloat(current?.FeelsLikeC || 0),
+              condition: current?.weatherDesc?.[0]?.value || 'Unknown',
+              humidity: parseInt(current?.humidity || 0),
+              wind_kph: parseFloat(current?.windspeedKmph || 0),
+              icon: getWeatherEmoji(current?.weatherCode),
+            });
+          } catch (e) {
+            resolve({ available: false, error: e.message });
+          }
+        });
+      }).on('error', (e) => resolve({ available: false, error: e.message }));
+    });
+  } catch (e) {
+    return { available: false, error: e.message };
+  }
+}
+
+function getWeatherEmoji(code) {
+  const codeNum = parseInt(code || 0);
+  if (codeNum >= 200 && codeNum < 300) return '⛈️';
+  if (codeNum >= 300 && codeNum < 400) return '🌧️';
+  if (codeNum >= 500 && codeNum < 600) return '🌧️';
+  if (codeNum >= 600 && codeNum < 700) return '❄️';
+  if (codeNum >= 700 && codeNum < 800) return '🌫️';
+  if (codeNum === 113) return '☀️';
+  if (codeNum === 116) return '⛅';
+  if (codeNum === 119 || codeNum === 122) return '☁️';
+  return '🌤️';
+}
+
+// Fetch calendar events using gog
+async function fetchCalendarEvents() {
+  try {
+    const output = await runCommand(
+      'GOG_KEYRING_PASSWORD="henrybot" gog calendar list --days 2 --account paul@heth.ca 2>/dev/null',
+      8000
+    );
+    // Parse text output (columns: ID, START, END, SUMMARY)
+    const lines = output.split('\n').filter(l => l.trim() && !l.startsWith('ID'));
+    const events = lines.slice(0, 10).map(line => {
+      // Split by multiple spaces to separate columns
+      const parts = line.split(/\s{2,}/);
+      if (parts.length >= 4) {
+        const [id, start, end, ...summaryParts] = parts;
+        return {
+          title: summaryParts.join(' ').trim(),
+          start: start.trim(),
+          end: end.trim(),
+          allDay: !start.includes('T'),
+        };
+      }
+      return null;
+    }).filter(Boolean);
+    
+    return {
+      available: true,
+      events,
+      source: 'live',
+    };
+  } catch (e) {
+    return { available: false, error: e.message, events: [] };
+  }
+}
+
+// Aggregate dashboard data
+async function fetchDashboardData() {
+  const [tasks, weather, calendar] = await Promise.all([
+    toodledoClient ? fetchToodledoTasks() : Promise.resolve(generateSampleTaskData()),
+    fetchWeather('Vancouver'),
+    fetchCalendarEvents(),
+  ]);
+
+  // Calculate task summary
+  const now = Math.floor(Date.now() / 1000);
+  const todayStart = new Date().setHours(0, 0, 0, 0) / 1000;
+  const weekAgo = now - 7 * 86400;
+
+  const taskSummary = {
+    dueToday: (tasks.open || []).filter(t => t.duedate && t.duedate <= now + 86400 && t.duedate > todayStart).length,
+    overdue: (tasks.open || []).filter(t => t.duedate && t.duedate < todayStart).length,
+    completedToday: (tasks.completed || []).filter(t => t.completed >= todayStart).length,
+    completedWeek: (tasks.completed || []).filter(t => t.completed >= weekAgo).length,
+    totalOpen: tasks.totalOpen || 0,
+  };
+
+  return {
+    generatedAt: new Date().toISOString(),
+    source: 'live',
+    tasks: taskSummary,
+    weather,
+    calendar,
+  };
+}
+
+// Fetch system status
+async function fetchSystemStatus() {
+  const results = {
+    generatedAt: new Date().toISOString(),
+    source: 'live',
+    services: [],
+    vm: {},
+  };
+
+  // Check gateway
+  try {
+    const gatewayOutput = await runCommand('clawdbot gateway status 2>/dev/null | head -5', 3000);
+    results.services.push({
+      name: 'Clawdbot Gateway',
+      status: gatewayOutput.includes('running') ? 'online' : 'offline',
+      details: gatewayOutput.split('\n')[0],
+    });
+  } catch (e) {
+    results.services.push({ name: 'Clawdbot Gateway', status: 'unknown', error: e.message });
+  }
+
+  // Check VM stats
+  try {
+    const uptime = await runCommand('uptime', 2000);
+    const disk = await runCommand("df -h / | tail -1 | awk '{print $5}'", 2000);
+    const memory = await runCommand("vm_stat | head -5", 2000);
+    
+    results.vm = {
+      uptime: uptime.replace(/^.*up/, 'up'),
+      diskUsage: disk,
+      memory: memory,
+    };
+  } catch (e) {
+    results.vm = { error: e.message };
+  }
+
+  // Check file-server itself
+  results.services.push({
+    name: 'File Server',
+    status: 'online',
+    details: `Port ${PORT}`,
+  });
+
+  return results;
+}
+
 // Create HTTP server
 const server = http.createServer((req, res) => {
   // CORS headers
@@ -456,6 +626,36 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ history: [], days, source: 'sample' }));
     }
+    return;
+  }
+
+  // Dashboard API endpoint - aggregates calendar, tasks, weather
+  if (url.pathname === '/api/dashboard') {
+    fetchDashboardData()
+      .then(data => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+      })
+      .catch(err => {
+        console.error('Error fetching dashboard data:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message, source: 'error' }));
+      });
+    return;
+  }
+
+  // System status API endpoint
+  if (url.pathname === '/api/system') {
+    fetchSystemStatus()
+      .then(data => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+      })
+      .catch(err => {
+        console.error('Error fetching system status:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message, source: 'error' }));
+      });
     return;
   }
   
