@@ -178,7 +178,6 @@ function ServiceCard({ service }: { service: ServiceStatus }) {
           Checked {formatDistanceToNow(service.lastCheck, { addSuffix: true })}
         </div>
       </div>
-      <StatusBadge status={service.status} />
     </div>
   );
 }
