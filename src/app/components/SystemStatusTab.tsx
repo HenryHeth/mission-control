@@ -314,7 +314,8 @@ function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
   const last4Days = Array.from({ length: 4 }, (_, i) => {
     const date = new Date();
     date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
+    // Use local date format, not UTC
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     const file = data.files.find(f => f.date === dateStr);
     return { date: dateStr, file };
   });

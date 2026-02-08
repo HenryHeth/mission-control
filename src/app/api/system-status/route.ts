@@ -313,7 +313,8 @@ function getTelegramDumps(): TelegramDumpsInfo {
     for (let i = 0; i < 7; i++) {
       const checkDate = new Date(today);
       checkDate.setDate(today.getDate() - i);
-      const dateStr = checkDate.toISOString().split('T')[0];
+      // Use local date format, not UTC
+      const dateStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
       
       // Skip today if it's early morning
       if (i === 0 && new Date().getHours() < 3) continue;
