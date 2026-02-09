@@ -409,15 +409,14 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
       const lines = logContent.split('\n');
       
       // Parse heartbeat entries from last 24h
+      // Match only actual log entries, not quoted text in messages
       const heartbeats: { time: string; ok: boolean }[] = [];
       for (const line of lines) {
-        if (line.includes('[heartbeat] started')) {
-          const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)/);
-          if (match) {
-            const timestamp = new Date(match[1]);
-            if (timestamp >= twentyFourHoursAgo) {
-              heartbeats.push({ time: match[1], ok: true });
-            }
+        const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+\[heartbeat\]\s+started/);
+        if (match) {
+          const timestamp = new Date(match[1]);
+          if (timestamp >= twentyFourHoursAgo) {
+            heartbeats.push({ time: match[1], ok: true });
           }
         }
       }
@@ -493,6 +492,65 @@ function getContextUsage(): ContextUsageInfo {
   return result;
 }
 
+// Read cron jobs from local state file
+function getCronJobs(): { name: string; schedule: string; lastRun?: string; nextRun?: string; status: string }[] {
+  try {
+    const cronJobsPath = path.join(process.env.HOME || '', '.clawdbot', 'cron', 'jobs.json');
+    if (!fs.existsSync(cronJobsPath)) return [];
+    
+    const data = JSON.parse(fs.readFileSync(cronJobsPath, 'utf-8'));
+    if (!data.jobs || !Array.isArray(data.jobs)) return [];
+    
+    return data.jobs.map((job: { 
+      id?: string; 
+      name?: string; 
+      enabled?: boolean;
+      schedule?: { kind: string; expr: string };
+      state?: { lastRunAtMs?: number; nextRunAtMs?: number; lastStatus?: string };
+    }) => ({
+      name: job.name || job.id || 'Unknown',
+      schedule: job.schedule?.expr || '',
+      lastRun: job.state?.lastRunAtMs ? new Date(job.state.lastRunAtMs).toISOString() : undefined,
+      nextRun: job.state?.nextRunAtMs ? new Date(job.state.nextRunAtMs).toISOString() : undefined,
+      status: job.enabled === false ? 'pending' : (job.state?.lastStatus === 'ok' ? 'success' : job.state?.lastStatus || 'pending')
+    }));
+  } catch (e) {
+    console.error('getCronJobs error:', e);
+    return [];
+  }
+}
+
+// Read sub-agent sessions from local state file
+function getSubAgents(): { id: string; label: string; status: string; startTime: string; endTime?: string; task: string; model?: string }[] {
+  try {
+    const runsPath = path.join(process.env.HOME || '', '.clawdbot', 'subagents', 'runs.json');
+    if (!fs.existsSync(runsPath)) return [];
+    
+    const data = JSON.parse(fs.readFileSync(runsPath, 'utf-8'));
+    if (!data.runs || typeof data.runs !== 'object') return [];
+    
+    // Convert runs object to array
+    const runs = Object.entries(data.runs).map(([id, run]: [string, unknown]) => {
+      const r = run as { label?: string; status?: string; startedAt?: number; endedAt?: number; task?: string; model?: string };
+      return {
+        id,
+        label: r.label || id,
+        status: r.endedAt ? 'completed' : 'running',
+        startTime: r.startedAt ? new Date(r.startedAt).toISOString() : new Date().toISOString(),
+        endTime: r.endedAt ? new Date(r.endedAt).toISOString() : undefined,
+        task: r.task || r.label || 'Sub-agent task',
+        model: r.model
+      };
+    });
+    
+    // Sort by start time, most recent first
+    return runs.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  } catch (e) {
+    console.error('getSubAgents error:', e);
+    return [];
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -517,7 +575,11 @@ export async function GET(request: NextRequest) {
     }
     
     // Return all sections (including live service checks)
-    const { services, voiceMetrics } = await getAllServices();
+    const [{ services, voiceMetrics }, cronJobs, subAgents] = await Promise.all([
+      getAllServices(),
+      getCronJobs(),
+      getSubAgents()
+    ]);
     
     return NextResponse.json({
       services,
@@ -526,6 +588,8 @@ export async function GET(request: NextRequest) {
       memory: getMemorySystemInfo(),
       heartbeat: getHeartbeatHealth(),
       context: getContextUsage(),
+      cronJobs,
+      subAgents,
       timestamp: new Date().toISOString()
     });
   } catch (error) {

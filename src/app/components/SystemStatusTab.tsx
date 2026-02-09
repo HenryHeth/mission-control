@@ -310,15 +310,24 @@ function SubAgentTimelineRow({ agent }: { agent: SubAgent }) {
    ═══════════════════════════════════════════════════════ */
 
 function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
-  // Generate last 4 days for display
-  const last4Days = Array.from({ length: 4 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    // Use local date format, not UTC
-    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const file = data.files.find(f => f.date === dateStr);
-    return { date: dateStr, file };
-  });
+  // Generate last 4 days for display - use files data directly to avoid timezone issues
+  // Show the 4 most recent calendar days, checking if each has a dump
+  const [clientDates, setClientDates] = useState<string[]>([]);
+  
+  useEffect(() => {
+    // Generate dates on client side only to avoid SSR timezone mismatch
+    const dates = Array.from({ length: 4 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    });
+    setClientDates(dates);
+  }, []);
+
+  const last4Days = clientDates.map(dateStr => ({
+    date: dateStr,
+    file: data.files.find(f => f.date === dateStr)
+  }));
 
   return (
     <div className="system-status__card system-status__card--telegram">
@@ -362,13 +371,15 @@ function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
         <div className="telegram-dumps-recent">
           <div className="telegram-dumps-recent-label">Last 4 Days:</div>
           <div className="telegram-dumps-day-list">
-            {last4Days.map(({ date, file }) => (
+            {last4Days.length === 0 ? (
+              <div className="telegram-dumps-loading">Loading...</div>
+            ) : last4Days.map(({ date, file }) => (
               <div 
                 key={date}
                 className={`telegram-dumps-day-item ${file ? '' : 'telegram-dumps-day-item--missing'}`}
               >
                 <span className="telegram-dumps-day-date">
-                  {format(new Date(date), 'MMM d')}
+                  {format(new Date(date + 'T12:00:00'), 'MMM d')}
                 </span>
                 {file ? (
                   <>
@@ -660,220 +671,58 @@ export default function SystemStatusTab() {
   const [contextUsage, setContextUsage] = useState<ContextUsageInfo | null>(null);
 
   const generateSampleData = useCallback(() => {
-    // Sample services
+    // Fallback sample services (only used if API fails)
     setServices([
       {
         name: 'Clawdbot Gateway',
-        status: 'online',
+        status: 'unknown',
         lastCheck: new Date(),
-        details: 'Port 18789',
-        url: 'http://localhost:3001'
+        details: 'Port 18789'
       },
       {
         name: 'Voice Server',
-        status: 'online',
+        status: 'unknown',
         lastCheck: new Date(),
-        details: 'Port 6060',
-        url: 'http://localhost:6060'
+        details: 'Port 6060'
       },
       {
         name: 'File Server',
-        status: 'online',
+        status: 'unknown',
         lastCheck: new Date(),
-        details: 'Port 3456',
-        url: 'http://localhost:3456'
+        details: 'Port 3456'
       },
       {
         name: 'Browser Proxy',
-        status: 'online',
+        status: 'unknown',
         lastCheck: new Date(),
-        details: 'Port 18800',
+        details: 'Port 18800'
       }
     ]);
 
-    // Voice metrics
+    // Voice metrics - will be populated from API
     setVoiceMetrics({
-      status: 'online',
+      status: 'unknown',
       activeCalls: 0,
-      totalCalls: 3,
-      uptime: 7200 + Math.floor(Math.random() * 14400),
-      lastError: Math.random() > 0.7 ? 'Connection timeout after 30s' : undefined,
-      lastErrorTime: Math.random() > 0.7 ? new Date(Date.now() - 3600000) : undefined
+      totalCalls: 0
     });
 
-    // Sample cron jobs
-    const now = new Date();
-    setCronJobs([
-      {
-        name: 'Morning Briefing',
-        schedule: '0 7 * * *',
-        lastRun: new Date(now.getTime() - 12 * 3600000),
-        nextRun: new Date(now.getTime() + 12 * 3600000),
-        status: 'success',
-        duration: 45
-      },
-      {
-        name: 'Heartbeat Check',
-        schedule: '*/30 * * * *',
-        lastRun: new Date(now.getTime() - 15 * 60000),
-        nextRun: new Date(now.getTime() + 15 * 60000),
-        status: 'success',
-        duration: 12
-      },
-      {
-        name: 'Email Digest',
-        schedule: '0 9,17 * * *',
-        lastRun: new Date(now.getTime() - 8 * 3600000),
-        nextRun: new Date(now.getTime() + 4 * 3600000),
-        status: 'success',
-        duration: 28
-      }
-    ]);
+    // Empty cron jobs - will be populated from API
+    setCronJobs([]);
 
-    // Sample sub-agents
-    setSubAgents([
-      {
-        id: 'overnight-mc-dashboard',
-        label: 'overnight-mc-dashboard-merge',
-        status: 'running',
-        startTime: new Date(Date.now() - 180000),
-        task: 'Mission Control v1.5 dashboard merging',
-        model: 'claude-opus-4-5',
-        tokensUsed: 45000
-      },
-      {
-        id: 'research-travel',
-        label: 'research-travel-apis',
-        status: 'completed',
-        startTime: new Date(Date.now() - 2 * 3600000),
-        endTime: new Date(Date.now() - 1.5 * 3600000),
-        task: 'Research flight booking APIs for trip planning',
-        model: 'claude-sonnet-4',
-        tokensUsed: 28000
-      },
-      {
-        id: 'calendar-sync',
-        label: 'calendar-event-sync',
-        status: 'completed',
-        startTime: new Date(Date.now() - 4 * 3600000),
-        endTime: new Date(Date.now() - 3.9 * 3600000),
-        task: 'Sync Google Calendar events',
-        model: 'gemini-2.5-flash-lite',
-        tokensUsed: 3500
-      }
-    ]);
+    // Empty sub-agents - will be populated from API
+    setSubAgents([]);
 
-    // Sample Telegram Dumps data
-    const today = new Date();
-    const twoDaysAgo = new Date(today.getTime() - 2 * 24 * 3600000);
-    const threeDaysAgo = new Date(today.getTime() - 3 * 24 * 3600000);
-    const fourDaysAgo = new Date(today.getTime() - 4 * 24 * 3600000);
-    
-    setTelegramDumps({
-      lastDump: {
-        filename: format(today, 'yyyy-MM-dd') + '.md',
-        date: format(today, 'yyyy-MM-dd'),
-        size: 3584,
-        lastModified: new Date(today.getTime() - 12 * 60000).toISOString(),
-        lines: 70
-      },
-      files: [
-        {
-          filename: format(today, 'yyyy-MM-dd') + '.md',
-          date: format(today, 'yyyy-MM-dd'),
-          size: 3584,
-          lastModified: new Date(today.getTime() - 12 * 60000).toISOString(),
-          lines: 70
-        },
-        {
-          filename: format(twoDaysAgo, 'yyyy-MM-dd') + '.md',
-          date: format(twoDaysAgo, 'yyyy-MM-dd'),
-          size: 23552,
-          lastModified: twoDaysAgo.toISOString(),
-          lines: 420
-        },
-        {
-          filename: format(threeDaysAgo, 'yyyy-MM-dd') + '.md',
-          date: format(threeDaysAgo, 'yyyy-MM-dd'),
-          size: 8499,
-          lastModified: threeDaysAgo.toISOString(),
-          lines: 156
-        },
-        {
-          filename: format(fourDaysAgo, 'yyyy-MM-dd') + '.md',
-          date: format(fourDaysAgo, 'yyyy-MM-dd'),
-          size: 12288,
-          lastModified: fourDaysAgo.toISOString(),
-          lines: 234
-        }
-      ],
-      totalSize: 47923,
-      missingDays: [format(new Date(today.getTime() - 1 * 24 * 3600000), 'yyyy-MM-dd')]
-    });
+    // Telegram dumps - will be populated from API
+    setTelegramDumps(null);
 
-    // Sample Heartbeat Health data - generate 48 slots (24h * 2 per hour)
-    const heartbeatHistory: { time: string; ok: boolean }[] = [];
-    for (let i = 47; i >= 0; i--) {
-      const slotTime = new Date(now.getTime() - i * 30 * 60000);
-      // Active hours: 7am - midnight PST
-      const hour = slotTime.getHours();
-      const isActiveHour = hour >= 7 && hour < 24;
-      heartbeatHistory.push({
-        time: slotTime.toISOString(),
-        ok: isActiveHour ? Math.random() > 0.02 : true // 98% success rate during active hours
-      });
-    }
-    
-    setHeartbeatHealth({
-      config: {
-        every: '30m',
-        activeHours: { start: '07:00', end: '00:00' },
-        model: 'google/gemini-2.5-flash-lite-preview-06-17',
-        target: 'telegram'
-      },
-      lastHeartbeat: new Date(now.getTime() - 33 * 60000).toISOString(),
-      status: 'healthy',
-      history24h: heartbeatHistory
-    });
+    // Heartbeat health - will be populated from API
+    setHeartbeatHealth(null);
 
-    // Sample Memory System data
-    setMemorySystem({
-      memoryMd: {
-        size: 23552,
-        lastModified: new Date(now.getTime() - 2 * 3600000).toISOString()
-      },
-      memoryFolder: {
-        totalSize: 1258291,
-        fileCount: 58,
-        lastModified: new Date(now.getTime() - 30 * 60000).toISOString()
-      },
-      telegramDumps: {
-        totalSize: 35840,
-        fileCount: 4,
-        lastModified: new Date(now.getTime() - 12 * 60000).toISOString()
-      },
-      voiceCalls: {
-        totalSize: 911360,
-        fileCount: 85,
-        lastModified: new Date(now.getTime() - 24 * 3600000).toISOString()
-      }
-    });
+    // Memory system - will be populated from API
+    setMemorySystem(null);
 
-    // Sample Context Usage data
-    setContextUsage({
-      currentTokens: 45000,
-      maxTokens: 200000,
-      percentUsed: 22.5,
-      compactionsToday: 1,
-      lastCompaction: new Date(now.getTime() - 100 * 60000).toISOString(),
-      memoryFlush: {
-        enabled: true,
-        prompt: 'Flush important context to memory files'
-      }
-    });
-
-    setLoading(false);
-    setLastRefresh(new Date());
+    // Context usage - will be populated from API
+    setContextUsage(null);
   }, []);
 
   const fetchSystemStatus = useCallback(async () => {
@@ -904,6 +753,36 @@ export default function SystemStatusTab() {
         if (data.heartbeat) setHeartbeatHealth(data.heartbeat);
         if (data.memory) setMemorySystem(data.memory);
         if (data.context) setContextUsage(data.context);
+        
+        // Update cron jobs from real data
+        if (data.cronJobs && data.cronJobs.length > 0) {
+          setCronJobs(data.cronJobs.map((job: { name: string; schedule: string; lastRun?: string; nextRun?: string; status: string }) => ({
+            name: job.name,
+            schedule: job.schedule,
+            lastRun: job.lastRun ? new Date(job.lastRun) : undefined,
+            nextRun: job.nextRun ? new Date(job.nextRun) : undefined,
+            status: job.status as 'success' | 'failed' | 'pending' | 'running'
+          })));
+        } else if (data.cronJobs) {
+          // API returned empty array - clear sample data
+          setCronJobs([]);
+        }
+        
+        // Update sub-agents from real data
+        if (data.subAgents && data.subAgents.length > 0) {
+          setSubAgents(data.subAgents.map((a: { id: string; label: string; status: string; startTime: string; endTime?: string; task: string; model?: string }) => ({
+            id: a.id,
+            label: a.label,
+            status: a.status as 'running' | 'completed' | 'failed' | 'pending',
+            startTime: new Date(a.startTime),
+            endTime: a.endTime ? new Date(a.endTime) : undefined,
+            task: a.task,
+            model: a.model
+          })));
+        } else if (data.subAgents) {
+          // API returned empty array - clear sample data
+          setSubAgents([]);
+        }
       }
     } catch (e) {
       console.error('Failed to fetch system status:', e);
@@ -935,9 +814,19 @@ export default function SystemStatusTab() {
   }, []);
 
   useEffect(() => {
-    generateSampleData();
-    checkLiveServices();
-    fetchSystemStatus();
+    // Load real data first, fall back to sample data only if API fails
+    const initializeData = async () => {
+      try {
+        await Promise.all([checkLiveServices(), fetchSystemStatus()]);
+      } catch (e) {
+        console.error('API failed, using sample data:', e);
+        generateSampleData();
+      }
+      setLoading(false);
+      setLastRefresh(new Date());
+    };
+    
+    initializeData();
     
     const interval = setInterval(() => {
       checkLiveServices();
@@ -1030,11 +919,18 @@ export default function SystemStatusTab() {
           <div className="system-status__card-header">
             <Calendar size={18} style={{ color: 'var(--amber)' }} />
             <h2>Scheduled Jobs</h2>
+            {cronJobs.length > 0 && (
+              <span className="system-status__card-count">{cronJobs.length} jobs</span>
+            )}
           </div>
           <div className="cron-list">
-            {cronJobs.map(job => (
-              <CronJobRow key={job.name} job={job} />
-            ))}
+            {cronJobs.length === 0 ? (
+              <div className="empty-state">No scheduled jobs found</div>
+            ) : (
+              cronJobs.map(job => (
+                <CronJobRow key={job.name} job={job} />
+              ))
+            )}
           </div>
         </div>
 
