@@ -115,7 +115,7 @@ node scripts/toodledo_safe_update.js <taskId> --update "text" --dry-run
 - Paul checks Toodledo. If it's not there, he doesn't see it.
 
 #### Workflow
-- **🔗 TASK LINKS:** Toodledo web → Action button → "Permanent Link"
+- **🔗 TASK LINKS:** Toodledo web → Action button (circle with down arrow) → "Permanent Link" — use this format, Paul can't search by ID
 - **🚧 BLOCKER ESCALATION:** When blocked on overnight work:
   1. Get task permanent link from Toodledo
   2. Email paul@heth.ca with: task link + specific questions to unblock
@@ -138,6 +138,16 @@ node scripts/toodledo_safe_update.js <taskId> --update "text" --dry-run
   - `./scripts/gdrive-sync.sh --all` - also syncs memory/ and research/
 - **Manual upload:** `GOG_KEYRING_PASSWORD="henrybot" gog drive upload FILE.md --parent 1zXtBxhhGZU9aVtPMoI8IWbSyqxqO6r_C --account henry@heth.ca`
 - **Note:** MD files display as raw text in Drive preview. For formatted view, open in a markdown-capable app or use HTML conversion.
+
+### Home Assistant
+- **URL:** http://192.168.1.96:8123
+- **Token:** `HOME_ASSISTANT_TOKEN` in `.env`
+- **API pattern:** `curl -s -X POST "http://192.168.1.96:8123/api/services/{domain}/{action}" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"entity_id": "..."}'`
+
+**Known entities:**
+- `light.office_lights_group` — Paul's office lights (turn_on/turn_off)
+- `switch.garage_door_z_switch` — Garage door toggle (turn_on to toggle open/close)
+- `sensor.sitting_at_desk` — Desk sitting time sensor
 
 ### Bitwarden
 - **CLI:** `bw` installed, account henry@heth.ca

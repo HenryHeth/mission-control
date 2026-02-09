@@ -69,8 +69,8 @@ Rules:
 4. **Ignore** everything else
 5. Do NOT let emails sit unread for hours
 
-## 🌙 9 PM Evening Prep
-At ~9 PM: Review new4henry queue. Message Paul on Telegram if any tasks need clarification BEFORE he goes to bed.
+## 🌙 11 PM Evening Prep
+At ~11 PM: Review overnight queue. Message Paul on Telegram if any tasks need clarification BEFORE he goes to bed.
 
 ## Quick Status Check
 - Do I know who Paul is? ✓

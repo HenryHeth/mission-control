@@ -658,6 +658,83 @@ const server = http.createServer((req, res) => {
       });
     return;
   }
+
+  // Search API endpoint (v1.5)
+  if (url.pathname === '/api/search') {
+    const query = url.searchParams.get('q') || '';
+    if (!query.trim()) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Query parameter "q" is required', results: [] }));
+      return;
+    }
+    
+    try {
+      const files = getAllFiles();
+      const queryLower = query.toLowerCase();
+      const results = [];
+      
+      for (const file of files) {
+        // Check if query matches filename
+        const nameMatch = file.name.toLowerCase().includes(queryLower);
+        
+        // Try to read file content and search
+        let fullPath;
+        if (ROOT_CONFIG_FILES.includes(file.path)) {
+          fullPath = path.join(CLAWD_ROOT, file.path);
+        } else if (file.path.startsWith('memory/') || file.path.startsWith('docs/')) {
+          fullPath = path.join(CLAWD_ROOT, file.path);
+        } else {
+          fullPath = path.join(MEMORY_DIR, file.path);
+        }
+        
+        if (!fs.existsSync(fullPath)) continue;
+        
+        const content = fs.readFileSync(fullPath, 'utf8');
+        const contentLower = content.toLowerCase();
+        
+        // Count matches in content
+        let matches = 0;
+        let idx = 0;
+        while ((idx = contentLower.indexOf(queryLower, idx)) !== -1) {
+          matches++;
+          idx += queryLower.length;
+        }
+        
+        if (nameMatch || matches > 0) {
+          // Extract a snippet around the first match
+          let snippet = '';
+          const firstMatchIdx = contentLower.indexOf(queryLower);
+          if (firstMatchIdx !== -1) {
+            const start = Math.max(0, firstMatchIdx - 50);
+            const end = Math.min(content.length, firstMatchIdx + queryLower.length + 100);
+            snippet = content.slice(start, end)
+              .replace(/\n/g, ' ')
+              .replace(new RegExp(query, 'gi'), '<mark>$&</mark>');
+            if (start > 0) snippet = '...' + snippet;
+            if (end < content.length) snippet = snippet + '...';
+          }
+          
+          results.push({
+            name: file.name,
+            path: file.path,
+            snippet,
+            matches: matches + (nameMatch ? 1 : 0),
+          });
+        }
+      }
+      
+      // Sort by match count
+      results.sort((a, b) => b.matches - a.matches);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ results: results.slice(0, 20), query }));
+    } catch (err) {
+      console.error('Search error:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message, results: [] }));
+    }
+    return;
+  }
   
   // Not found
   res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -667,7 +744,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
-║     📁 Mission Control File Server v1.5                  ║
+║     📁 Mission Control File Server v1.5.0                ║
 ╠══════════════════════════════════════════════════════════╣
 ║                                                          ║
 ║  Server running at http://localhost:${PORT}               ║
@@ -675,6 +752,7 @@ server.listen(PORT, () => {
 ║  Endpoints:                                              ║
 ║    GET /api/files          - List all files              ║
 ║    GET /api/files/:path    - Get file content            ║
+║    GET /api/search?q=...   - Search file contents        ║
 ║    GET /api/tasks          - Toodledo tasks data         ║
 ║    GET /api/spending       - API spending/costs          ║
 ║    GET /api/spending/history?days=7 - Historical data    ║

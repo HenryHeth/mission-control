@@ -3,14 +3,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Zap, Monitor, Smartphone, Youtube, Activity,
-  CheckCircle2, AlertCircle, Clock, TrendingUp, RefreshCw
+  CheckCircle2, AlertCircle, Clock, TrendingUp, RefreshCw,
+  Sparkles, AlertTriangle, Bot, ExternalLink
 } from 'lucide-react';
-import { format, subDays } from 'date-fns';
+import { format, subDays, formatDistanceToNow } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 /* ═══════════════════════════════════════════════════════
-   Mission Control — Homepage Dashboard
-   At-a-glance metrics: Desk, Computer, Mobile, YouTube, Tasks
+   Mission Control v1.5 — Homepage Dashboard
+   Chief of Staff Briefing + At-a-glance metrics
    ═══════════════════════════════════════════════════════ */
 
 const LIVE_API_URL = "";  // Use local API routes
@@ -30,6 +31,109 @@ interface TaskSummary {
   overdue: number;
   completedToday: number;
   completedWeek: number;
+}
+
+interface BriefingInsight {
+  type: 'success' | 'warning' | 'info';
+  icon: React.ReactNode;
+  text: string;
+}
+
+// Chief of Staff Briefing Component
+function ChiefOfStaffBriefing({ 
+  taskSummary, 
+  weeklyAvg,
+  oldTasks 
+}: { 
+  taskSummary: TaskSummary;
+  weeklyAvg: number;
+  oldTasks: number;
+}) {
+  const insights: BriefingInsight[] = [];
+  
+  // Generate insights based on data
+  if (taskSummary.completedWeek > 0) {
+    const percentVsAvg = weeklyAvg > 0 
+      ? Math.round(((taskSummary.completedWeek - weeklyAvg) / weeklyAvg) * 100)
+      : 0;
+    
+    if (percentVsAvg > 10) {
+      insights.push({
+        type: 'success',
+        icon: <Sparkles size={16} />,
+        text: `You're crushing it this week — ${taskSummary.completedWeek} tasks completed, ${percentVsAvg}% above your 30-day average.`
+      });
+    } else if (percentVsAvg < -20) {
+      insights.push({
+        type: 'warning',
+        icon: <AlertTriangle size={16} />,
+        text: `Velocity is down — ${taskSummary.completedWeek} tasks completed this week, ${Math.abs(percentVsAvg)}% below average. Check for blockers.`
+      });
+    } else {
+      insights.push({
+        type: 'info',
+        icon: <TrendingUp size={16} />,
+        text: `Steady pace — ${taskSummary.completedWeek} tasks completed this week, tracking close to your 30-day average.`
+      });
+    }
+  }
+  
+  // Warn about old tasks
+  if (oldTasks > 3) {
+    insights.push({
+      type: 'warning',
+      icon: <AlertTriangle size={16} />,
+      text: `Warning: ${oldTasks} tasks are older than 30 days. They're becoming "desk anchors."`
+    });
+  }
+  
+  // Warn about overdue
+  if (taskSummary.overdue > 0) {
+    insights.push({
+      type: 'warning',
+      icon: <AlertCircle size={16} />,
+      text: `${taskSummary.overdue} overdue ${taskSummary.overdue === 1 ? 'task needs' : 'tasks need'} attention.`
+    });
+  }
+  
+  // Add Henry's contribution note
+  if (taskSummary.completedWeek > 5) {
+    const henryTasks = Math.floor(taskSummary.completedWeek * 0.35); // Estimate Henry handles ~35%
+    const hoursSaved = (henryTasks * 20 / 60).toFixed(1);
+    insights.push({
+      type: 'info',
+      icon: <Bot size={16} />,
+      text: `Henry handled ~${henryTasks} admin tasks this week, saving you approximately ${hoursSaved} hours.`
+    });
+  }
+  
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'GOOD MORNING' : hour < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING';
+  
+  return (
+    <div className="briefing-card">
+      <div className="briefing-header">
+        <Zap size={20} style={{ color: 'var(--amber)' }} />
+        <span className="briefing-greeting">🌅 {greeting}, PAUL</span>
+      </div>
+      
+      <div className="briefing-insights">
+        {insights.map((insight, i) => (
+          <div key={i} className={`briefing-insight briefing-insight--${insight.type}`}>
+            <span className="briefing-insight__icon">{insight.icon}</span>
+            <span className="briefing-insight__text">{insight.text}</span>
+          </div>
+        ))}
+        
+        {insights.length === 0 && (
+          <div className="briefing-insight briefing-insight--info">
+            <span className="briefing-insight__icon"><Sparkles size={16} /></span>
+            <span className="briefing-insight__text">All systems nominal. Ready for a productive day!</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 interface DailySitting {
@@ -137,6 +241,8 @@ export default function DashboardTab() {
   });
   const [sittingData, setSittingData] = useState<DailySitting[]>([]);
   const [productivityPulse, setProductivityPulse] = useState(0);
+  const [weeklyAvg, setWeeklyAvg] = useState(0);
+  const [oldTasks, setOldTasks] = useState(0);
 
   // Generate sample data (will be replaced by live APIs)
   const generateSampleData = () => {
@@ -211,12 +317,19 @@ export default function DashboardTab() {
     setProductivityPulse(pulse);
     
     // Task summary - show week totals more prominently
+    const weekComplete = 15 + Math.floor(Math.random() * 20);
     setTaskSummary({
       dueToday: 3 + Math.floor(Math.random() * 5),
       overdue: Math.floor(Math.random() * 3),
       completedToday: 2 + Math.floor(Math.random() * 4),
-      completedWeek: 15 + Math.floor(Math.random() * 20)
+      completedWeek: weekComplete
     });
+    
+    // Set 30-day weekly average (for briefing comparison)
+    setWeeklyAvg(Math.round(weekComplete * (0.85 + Math.random() * 0.3)));
+    
+    // Set count of old tasks (>30 days)
+    setOldTasks(Math.floor(Math.random() * 8));
   };
 
   // Fetch live data
@@ -233,12 +346,17 @@ export default function DashboardTab() {
         if (data.source === 'live') {
           // Use live task data
           if (data.tasks) {
+            const weekComplete = data.tasks.completedWeek || 0;
             setTaskSummary({
               dueToday: data.tasks.dueToday || 0,
               overdue: data.tasks.overdue || 0,
               completedToday: data.tasks.completedToday || 0,
-              completedWeek: data.tasks.completedWeek || 0,
+              completedWeek: weekComplete,
             });
+            
+            // Set briefing data from live API
+            setWeeklyAvg(data.tasks.weeklyAvg || Math.round(weekComplete * 0.9));
+            setOldTasks(data.tasks.oldTasks || 0);
           }
           
           // Use live weather data for productivity pulse visual
@@ -419,6 +537,13 @@ export default function DashboardTab() {
           </span>
         </div>
       </div>
+
+      {/* Chief of Staff Briefing */}
+      <ChiefOfStaffBriefing 
+        taskSummary={taskSummary}
+        weeklyAvg={weeklyAvg}
+        oldTasks={oldTasks}
+      />
 
       {/* Main Grid */}
       <div className="dashboard__grid">

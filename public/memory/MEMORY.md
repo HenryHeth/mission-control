@@ -7,6 +7,16 @@
 - **"Show me" is the test** — if Paul asks "show me" and I can't immediately produce verified output, I wasn't done
 - This is THE pattern that destroys trust. Code existing ≠ working. Sub-agent saying done ≠ done.
 
+## Heartbeat Issue (2026-02-08) — CRITICAL ONGOING
+- **Heartbeat scheduler silently stops** after a few hours — no errors, just stops
+- Impact: No overnight work, no Telegram dumps, no email checks, no proactive anything
+- **Patches applied Feb 6** (watchdog timer, 2min timeout) — NOT WORKING
+- Still seeing 27+ hour gaps (Feb 5→6, Feb 7→8)
+- Full timeline: `memory/heartbeat-issue.md`
+- GitHub: https://github.com/openclaw/openclaw/issues/2935
+- Toodledo: 443813806
+- **Wednesday Feb 12:** Review if fixes work; decide: debug core vs bulletproof external watchdog
+
 ## System Alert Protocol (2026-02-08) — ACT, DON'T OBSERVE
 - **System messages are ACTION ITEMS**, not informational
 - 🔴 Down alerts → Fix immediately, then message Paul confirming resolved
@@ -277,12 +287,21 @@
 - Reply to Paul's emails overnight — don't let him wake up to silence
 - Be proactive — volunteer accomplishments
 
+## Deployment Preferences (2026-02-08)
+- **Don't use ngrok for production** — only for quick local testing
+- **Prefer Railway or Vercel** — we have existing projects there
+- **Consolidate when possible** — don't spin up new deployments without checking existing infra first
+- **Ask before deploying** — get explicit approval for new deployments
+
 ## Browser: USE PUPPETEER-CORE VIA CDP (2026-02-01)
 - Direct CDP at http://127.0.0.1:18800 — WORKS RELIABLY
 - Clawdbot browser proxy — BROKEN, DO NOT USE
 - See TOOLS.md for pattern. Be patient with timeouts.
 
-## Toodledo Guardrails (2026-01-31)
+## Toodledo Guardrails (2026-01-31, updated 2026-02-08)
+- **Safe update script caveat:** It expects a specific format (Tasks + Updates). Using it on notes with different structure will reformat them. Be careful with existing notes.
+- **For new tasks:** Use `--update` to add progress; `--check-task` to mark subtasks done
+- **For restoration:** Direct API is okay to fix damage, then use script going forward
 1. **No Bulk Edits** without explicit logic review.
 2. **Central Auth Only** to prevent broken token chains.
 3. **Read-Only Default**; treat task history as sacred.

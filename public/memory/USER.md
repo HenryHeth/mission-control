@@ -29,5 +29,5 @@
 
 ## Context
 - **Task List:** Currently "out of control". Needs taming via Dashboard/AI.
-- **Tech Stack:** Mac, Tesla, Toodledo, Clawdbot, Home Assistant (House/Boat), RescueTime.
+- **Tech Stack:** Mac, Android (phone), Tesla, Toodledo, Clawdbot, Home Assistant (House/Boat), RescueTime.
 - **Goals:** Less desk time, less YouTube "slop", more sleep.
