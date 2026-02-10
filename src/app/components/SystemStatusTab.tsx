@@ -420,6 +420,18 @@ function HeartbeatHealthCard({ data }: { data: HeartbeatHealthInfo }) {
         <StatusBadge status={data.status} />
       </div>
       
+      {/* Note about workaround */}
+      <div className="heartbeat-workaround-note" style={{ 
+        fontSize: '11px', 
+        color: 'var(--text-dim)', 
+        padding: '4px 8px',
+        background: 'rgba(100,116,139,0.08)',
+        borderRadius: '4px',
+        marginBottom: '8px'
+      }}>
+        ⚡ Tracking external launchd trigger (workaround), not internal scheduler
+      </div>
+      
       <div className="heartbeat-info">
         <div className="heartbeat-row">
           <span className="heartbeat-label">Last Heartbeat:</span>

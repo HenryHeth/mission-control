@@ -3,7 +3,11 @@
 ## ⏱️ FIRST: Update Heartbeat Timestamp
 **Run this FIRST, every heartbeat, no exceptions:**
 ```bash
+# Update last-run timestamp
 echo '{"lastRun":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ~/.clawdbot/logs/heartbeat-last-run.json
+
+# Also append to history for 24h chart (keeps last 100 entries)
+node -e "const fs=require('fs'),p=require('path').join(process.env.HOME,'.clawdbot/logs/heartbeat-history.json');let h=[];try{h=JSON.parse(fs.readFileSync(p))}catch{};h.push(new Date().toISOString());fs.writeFileSync(p,JSON.stringify(h.slice(-100)))"
 ```
 
 ## 🚨 OVERNIGHT WORK IS MANDATORY (11 PM - 8 AM)
