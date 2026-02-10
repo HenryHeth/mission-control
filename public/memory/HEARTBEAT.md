@@ -1,5 +1,11 @@
 # HEARTBEAT.md
 
+## ⏱️ FIRST: Update Heartbeat Timestamp
+**Run this FIRST, every heartbeat, no exceptions:**
+```bash
+echo '{"lastRun":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ~/.clawdbot/logs/heartbeat-last-run.json
+```
+
 ## 🚨 OVERNIGHT WORK IS MANDATORY (11 PM - 8 AM)
 **YOU MUST WORK THE QUEUE OVERNIGHT. NO EXCEPTIONS.**
 If it's between 11 PM and 8 AM and you reply HEARTBEAT_OK without spawning a sub-agent, YOU HAVE FAILED.

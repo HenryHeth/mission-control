@@ -392,11 +392,15 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
   
   try {
     // Read config
+    let intervalMinutes = 30; // default
     if (fs.existsSync(CLAWDBOT_CONFIG)) {
       const config = JSON.parse(fs.readFileSync(CLAWDBOT_CONFIG, 'utf8'));
       const hbConfig = config?.agents?.defaults?.heartbeat;
       if (hbConfig) {
         result.config = hbConfig;
+        // Parse interval (e.g., "30m" -> 30)
+        const intervalMatch = hbConfig.every?.match(/^(\d+)m$/);
+        if (intervalMatch) intervalMinutes = parseInt(intervalMatch[1], 10);
       }
     }
     
@@ -404,28 +408,57 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
+    // Collect actual heartbeat timestamps
+    const actualHeartbeats: Date[] = [];
     if (fs.existsSync(GATEWAY_LOG)) {
       const logContent = fs.readFileSync(GATEWAY_LOG, 'utf8');
       const lines = logContent.split('\n');
       
-      // Parse heartbeat entries from last 24h
-      // Match only actual log entries, not quoted text in messages
-      const heartbeats: { time: string; ok: boolean }[] = [];
       for (const line of lines) {
         const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+\[heartbeat\]\s+started/);
         if (match) {
           const timestamp = new Date(match[1]);
           if (timestamp >= twentyFourHoursAgo) {
-            heartbeats.push({ time: match[1], ok: true });
+            actualHeartbeats.push(timestamp);
           }
         }
       }
-      
-      result.history24h = heartbeats.reverse(); // Most recent first
     }
     
-    // Also check heartbeat monitor state file for last heartbeat
-    if (fs.existsSync(HEARTBEAT_STATE)) {
+    // Generate expected slots (48 slots for 24h at 30min intervals)
+    const slotsCount = Math.floor(24 * 60 / intervalMinutes);
+    const toleranceMs = 10 * 60 * 1000; // 10 minute tolerance
+    
+    for (let i = 0; i < slotsCount; i++) {
+      const slotTime = new Date(now.getTime() - i * intervalMinutes * 60 * 1000);
+      // Check if any actual heartbeat fired within tolerance of this slot
+      const fired = actualHeartbeats.find(hb => 
+        Math.abs(hb.getTime() - slotTime.getTime()) < toleranceMs
+      );
+      result.history24h.push({ 
+        time: slotTime.toISOString(), 
+        ok: !!fired 
+      });
+    }
+    
+    // PRIMARY: Check heartbeat-last-run.json (written by Henry during each heartbeat)
+    const HEARTBEAT_LAST_RUN = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'heartbeat-last-run.json');
+    if (fs.existsSync(HEARTBEAT_LAST_RUN)) {
+      try {
+        const lastRun = JSON.parse(fs.readFileSync(HEARTBEAT_LAST_RUN, 'utf8'));
+        if (lastRun.lastRun) {
+          result.lastHeartbeat = lastRun.lastRun;
+          // Also add to actualHeartbeats for history tracking
+          const lastRunTime = new Date(lastRun.lastRun);
+          if (lastRunTime >= twentyFourHoursAgo && !actualHeartbeats.find(h => Math.abs(h.getTime() - lastRunTime.getTime()) < 60000)) {
+            actualHeartbeats.push(lastRunTime);
+          }
+        }
+      } catch {}
+    }
+    
+    // FALLBACK: Check heartbeat monitor state file
+    if (!result.lastHeartbeat && fs.existsSync(HEARTBEAT_STATE)) {
       try {
         const state = JSON.parse(fs.readFileSync(HEARTBEAT_STATE, 'utf8'));
         if (state.lastHeartbeatTime) {

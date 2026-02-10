@@ -26,6 +26,42 @@ cd /Users/henry_notabot/clawd && node -e "require('./scripts/toodledo_client.js'
 
 ---
 
+## Heartbeat External Trigger (2026-02-09)
+
+**Problem:** Clawdbot's internal heartbeat timer fires once at startup, then dies. Bug in scheduler code.
+
+**Solution:** External launchd job triggers heartbeat every 30 min via HTTP, bypassing broken timer.
+
+**How it works:**
+1. launchd runs curl every 30 min
+2. curl hits `http://127.0.0.1:18789/hooks/wake` with auth token
+3. Clawdbot receives wake → heartbeat runs
+
+**Files:**
+- Config: `~/.clawdbot/clawdbot.json` → `hooks.enabled: true`, `hooks.token: "hb-trigger-8f3k2m9x"`
+- launchd: `~/Library/LaunchAgents/com.clawdbot.heartbeat-trigger.plist`
+- Log: `~/.clawdbot/logs/heartbeat-trigger.log`
+- Full docs: `memory/heartbeat-issue.md`
+
+**Verification:**
+```bash
+# Check launchd status
+launchctl list | grep heartbeat-trigger
+
+# Check trigger log
+cat ~/.clawdbot/logs/heartbeat-trigger.log
+
+# Manual test
+curl -s -X POST "http://127.0.0.1:18789/hooks/wake" \
+  -H "Authorization: Bearer hb-trigger-8f3k2m9x" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Manual test","mode":"now"}'
+```
+
+**Survives:** VM restarts, gateway restarts, Clawdbot updates.
+
+---
+
 ## Integrations
 
 ### Toodledo
@@ -126,6 +162,20 @@ node scripts/toodledo_safe_update.js <taskId> --update "text" --dry-run
   2. Ask Paul clarifying questions
   3. Save his answers to each task note (tight summary, below subtasks)
   4. Then start work — task notes are source of truth
+
+### Google Calendar (Booking Meetings)
+- **Always book on Paul's calendar** using Henry's delegate access
+- **Command pattern:**
+  ```bash
+  GOG_KEYRING_PASSWORD="henrybot" gog calendar create paul@heth.ca \
+    --summary "Meeting Title" \
+    --from "YYYY-MM-DDTHH:MM:SS-08:00" \
+    --to "YYYY-MM-DDTHH:MM:SS-08:00" \
+    --description "Details here" \
+    --account henry@heth.ca
+  ```
+- **Why:** Paul owns the event → can move/edit it freely
+- **Never:** Create on Henry's calendar and invite Paul (he can't move those)
 
 ### Google Drive Sync (Workspace)
 - **Folder:** Henry-Clawd-Workspace

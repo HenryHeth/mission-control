@@ -3909,7 +3909,8 @@ body {
 }
 
 .heartbeat-tick--fail {
-  background: var(--card-border);
+  background: var(--red, #ef4444);
+  opacity: 0.6;
 }
 
 .heartbeat-history-summary {
