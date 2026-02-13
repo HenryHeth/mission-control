@@ -1930,16 +1930,17 @@ body {
 .services-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .service-card {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
   background: var(--bg-subtle);
   border-radius: var(--radius);
+  border: 1px solid var(--card-border);
   border-left: 3px solid;
 }
 
@@ -1948,13 +1949,17 @@ body {
 .service-card--degraded { border-left-color: var(--amber); }
 .service-card--unknown { border-left-color: var(--text-dim); }
 
-.service-card__icon {
-  flex-shrink: 0;
+.service-card__top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.service-card__info {
-  flex: 1;
-  min-width: 0;
+.service-card__name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .service-card__name {
@@ -1965,14 +1970,130 @@ body {
 
 .service-card__details {
   font-size: 0.7rem;
-  color: var(--text-muted);
-  margin-top: 2px;
+  color: var(--text-dim);
+  margin-left: 2px;
+}
+.service-card__details::before {
+  content: '·';
+  margin-right: 4px;
 }
 
 .service-card__meta {
   font-size: 0.6rem;
   color: var(--text-dim);
+}
+
+/* ── Voice Inline Stats ── */
+.service-card__voice-stats {
+  display: flex;
+  gap: 12px;
+  padding: 4px 8px;
+  background: rgba(100,116,139,0.08);
+  border-radius: 4px;
+  font-size: 11px;
+}
+.voice-inline-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+}
+
+/* ── Service Restart Button ── */
+.service-restart-btn {
+  background: rgba(100,116,139,0.12);
+  border: 1px solid rgba(100,116,139,0.2);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.service-restart-btn:hover {
+  background: rgba(100,116,139,0.2);
+  color: var(--text);
+}
+.service-restart-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Service Uptime Bar ── */
+.service-uptime-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 2px;
+}
+.service-uptime-ticks {
+  display: flex;
+  gap: 1.5px;
+  flex: 1;
+  height: 18px;
+  align-items: flex-end;
+}
+.service-uptime-tick {
+  width: 100%;
+  max-width: 8px;
+  height: 100%;
+  border-radius: 2px;
+  flex: 1;
+}
+.service-uptime-tick--up {
+  background: var(--emerald);
+  opacity: 0.6;
+}
+.service-uptime-tick--down {
+  background: var(--red);
+  opacity: 0.9;
+}
+.service-uptime-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+/* ── Spin Animation ── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+
+/* ── Telegram Dump Button ── */
+.telegram-dump-btn {
+  margin-left: auto;
+  background: var(--sky-dim);
+  border: 1px solid rgba(56,189,248,0.2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--sky);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.telegram-dump-btn:hover {
+  background: rgba(56,189,248,0.2);
+}
+.telegram-dump-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.telegram-dump-btn--running {
+  background: rgba(56,189,248,0.15);
 }
 
 /* ── Voice Server Card ── */
@@ -3911,6 +4032,11 @@ body {
 .heartbeat-tick--fail {
   background: var(--red, #ef4444);
   opacity: 0.6;
+}
+
+.heartbeat-tick--nodata {
+  background: rgba(100,116,139,0.2);
+  opacity: 0.4;
 }
 
 .heartbeat-history-summary {

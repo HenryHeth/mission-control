@@ -52,7 +52,7 @@ const WORKSPACE_FILES: WorkspaceFile[] = [
     icon: <User size={18} />,
     color: 'var(--sky)',
     description: "Henry's identity and core values",
-    editable: false
+    editable: true
   },
   {
     id: 'tools',
@@ -70,7 +70,7 @@ const WORKSPACE_FILES: WorkspaceFile[] = [
     icon: <User size={18} />,
     color: 'var(--purple, #8B5CF6)',
     description: "Paul's profile and preferences",
-    editable: false
+    editable: true
   },
   {
     id: 'agents',
@@ -356,7 +356,7 @@ export default function MemoryTab() {
       const res = await fetch(`${LIVE_API_URL}/api/files/${encodeURIComponent(selectedFile.path)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: fileContent })
+        body: JSON.stringify({ content: fileContent, backup: true })
       });
       
       if (res.ok) {

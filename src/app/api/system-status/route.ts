@@ -98,7 +98,7 @@ async function getVoiceServerStatus(): Promise<{ service: ServiceStatus; metrics
 // Get file server status (Mission Control live API)
 async function getFileServerStatus(): Promise<ServiceStatus> {
   const result: ServiceStatus = {
-    name: 'File Server',
+    name: 'MC File Server',
     status: 'unknown',
     lastCheck: new Date().toISOString(),
     details: 'Port 3456'
@@ -117,7 +117,7 @@ async function getFileServerStatus(): Promise<ServiceStatus> {
 // Get browser proxy status
 async function getBrowserProxyStatus(): Promise<ServiceStatus> {
   const result: ServiceStatus = {
-    name: 'Browser Proxy',
+    name: 'Automation Browser',
     status: 'unknown',
     lastCheck: new Date().toISOString(),
     details: 'Port 18800'
@@ -392,87 +392,46 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
   
   try {
     // Read config
-    let intervalMinutes = 30; // default
+    const intervalMinutes = 30;
     if (fs.existsSync(CLAWDBOT_CONFIG)) {
       const config = JSON.parse(fs.readFileSync(CLAWDBOT_CONFIG, 'utf8'));
       const hbConfig = config?.agents?.defaults?.heartbeat;
       if (hbConfig) {
         result.config = hbConfig;
-        // Parse interval (e.g., "30m" -> 30)
-        const intervalMatch = hbConfig.every?.match(/^(\d+)m$/);
-        if (intervalMatch) intervalMinutes = parseInt(intervalMatch[1], 10);
       }
     }
     
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
-    // PRIMARY SOURCE: heartbeat-last-run.json (written by Henry during each heartbeat via external trigger)
-    // This is the workaround for the broken internal scheduler - external launchd triggers wake endpoint
-    const HEARTBEAT_LAST_RUN = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'heartbeat-last-run.json');
-    const HEARTBEAT_HISTORY = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'heartbeat-history.json');
+    // SINGLE SOURCE OF TRUTH: persistent heartbeat store (maintained by file server)
+    // File server scans gateway log + all other sources every 5 min, deduplicates, persists
+    const HEARTBEAT_PERSISTENT = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'heartbeat-persistent.json');
     
-    // Collect heartbeat timestamps from history file (if exists)
     let actualHeartbeats: Date[] = [];
     
-    // Try to read heartbeat history (array of timestamps written by workaround)
-    if (fs.existsSync(HEARTBEAT_HISTORY)) {
+    if (fs.existsSync(HEARTBEAT_PERSISTENT)) {
       try {
-        const history = JSON.parse(fs.readFileSync(HEARTBEAT_HISTORY, 'utf8'));
-        if (Array.isArray(history)) {
-          actualHeartbeats = history
+        const data = JSON.parse(fs.readFileSync(HEARTBEAT_PERSISTENT, 'utf8'));
+        if (Array.isArray(data)) {
+          actualHeartbeats = data
             .map((ts: string) => new Date(ts))
-            .filter((d: Date) => d >= twentyFourHoursAgo);
+            .filter((d: Date) => d >= twentyFourHoursAgo)
+            .sort((a: Date, b: Date) => b.getTime() - a.getTime());
         }
       } catch {}
     }
     
-    // Read last run time
-    if (fs.existsSync(HEARTBEAT_LAST_RUN)) {
-      try {
-        const lastRun = JSON.parse(fs.readFileSync(HEARTBEAT_LAST_RUN, 'utf8'));
-        if (lastRun.lastRun) {
-          result.lastHeartbeat = lastRun.lastRun;
-          const lastRunTime = new Date(lastRun.lastRun);
-          // Add to history if not already there
-          if (!actualHeartbeats.find(h => Math.abs(h.getTime() - lastRunTime.getTime()) < 60000)) {
-            actualHeartbeats.push(lastRunTime);
-          }
-        }
-      } catch {}
+    // Set lastHeartbeat from most recent
+    if (actualHeartbeats.length > 0) {
+      result.lastHeartbeat = actualHeartbeats[0].toISOString();
     }
     
-    // FALLBACK: Also check gateway logs for [heartbeat] started (internal scheduler)
-    if (fs.existsSync(GATEWAY_LOG)) {
-      try {
-        const logContent = fs.readFileSync(GATEWAY_LOG, 'utf8');
-        const lines = logContent.split('\n');
-        
-        for (const line of lines) {
-          const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+\[heartbeat\]\s+started/);
-          if (match) {
-            const timestamp = new Date(match[1]);
-            if (timestamp >= twentyFourHoursAgo) {
-              // Add if not duplicate
-              if (!actualHeartbeats.find(h => Math.abs(h.getTime() - timestamp.getTime()) < 60000)) {
-                actualHeartbeats.push(timestamp);
-              }
-            }
-          }
-        }
-      } catch {}
-    }
-    
-    // Sort heartbeats by time
-    actualHeartbeats.sort((a, b) => b.getTime() - a.getTime());
-    
-    // Generate expected slots (48 slots for 24h at 30min intervals)
-    const slotsCount = Math.floor(24 * 60 / intervalMinutes);
+    // Generate exactly 48 slots (24h ÷ 30min = 48). Always 48. No exceptions.
     const toleranceMs = 10 * 60 * 1000; // 10 minute tolerance
     
-    for (let i = 0; i < slotsCount; i++) {
+    for (let i = 0; i < 48; i++) {
       const slotTime = new Date(now.getTime() - i * intervalMinutes * 60 * 1000);
-      // Check if any actual heartbeat fired within tolerance of this slot
       const fired = actualHeartbeats.find(hb => 
         Math.abs(hb.getTime() - slotTime.getTime()) < toleranceMs
       );
@@ -482,9 +441,10 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
       });
     }
     
-    // Update lastHeartbeat to most recent if we found any
-    if (!result.lastHeartbeat && actualHeartbeats.length > 0) {
-      result.lastHeartbeat = actualHeartbeats[0].toISOString();
+    // Determine health status
+    if (actualHeartbeats.length > 0) {
+      const minutesAgo = (now.getTime() - actualHeartbeats[0].getTime()) / 60000;
+      result.status = minutesAgo > 45 ? 'stale' : 'healthy';
     }
     
     // FALLBACK: Check heartbeat monitor state file

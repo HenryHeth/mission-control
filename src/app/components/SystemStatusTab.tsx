@@ -6,7 +6,7 @@ import {
   XCircle, AlertTriangle, RefreshCw, Cpu, Zap,
   Calendar, Terminal, User, Timer, FileText,
   MessageSquare, Heart, Database, Brain, FolderOpen,
-  Mic, ExternalLink
+  Mic, ExternalLink, RotateCcw, Download, Play
 } from 'lucide-react';
 import { format, formatDistanceToNow, differenceInSeconds, differenceInMinutes, differenceInHours } from 'date-fns';
 
@@ -155,7 +155,52 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-function ServiceCard({ service }: { service: ServiceStatus }) {
+interface ServiceHealthEntry {
+  time: string;
+  ok: boolean;
+}
+
+interface ServiceHealthHistory {
+  [serviceName: string]: ServiceHealthEntry[];
+}
+
+function ServiceUptimeBar({ history }: { history: ServiceHealthEntry[] }) {
+  // Show last 48 ticks (4h of 5-min checks, or whatever we have)
+  const ticks = history.slice(-48);
+  if (ticks.length === 0) {
+    return (
+      <div className="service-uptime-bar" style={{ opacity: 0.4, fontSize: '11px', color: 'var(--text-dim)' }}>
+        Collecting data...
+      </div>
+    );
+  }
+  
+  const upCount = ticks.filter(t => t.ok).length;
+  const pct = Math.round((upCount / ticks.length) * 100);
+  
+  return (
+    <div className="service-uptime-bar">
+      <div className="service-uptime-ticks">
+        {ticks.map((t, i) => (
+          <div 
+            key={i}
+            className={`service-uptime-tick ${t.ok ? 'service-uptime-tick--up' : 'service-uptime-tick--down'}`}
+            title={`${format(new Date(t.time), 'h:mm a')}: ${t.ok ? 'UP' : 'DOWN'}`}
+          />
+        ))}
+      </div>
+      <div className="service-uptime-label">{pct}% uptime</div>
+    </div>
+  );
+}
+
+function ServiceCard({ service, healthHistory, onRestart, isRestarting, voiceMetrics }: { 
+  service: ServiceStatus; 
+  healthHistory?: ServiceHealthEntry[];
+  onRestart?: (serviceKey: string) => void;
+  isRestarting?: boolean;
+  voiceMetrics?: VoiceServerMetrics;
+}) {
   const statusIcon = service.status === 'online' ? (
     <CheckCircle2 size={16} style={{ color: 'var(--emerald)' }} />
   ) : service.status === 'offline' ? (
@@ -166,18 +211,50 @@ function ServiceCard({ service }: { service: ServiceStatus }) {
     <Activity size={16} style={{ color: '#64748B' }} />
   );
 
+  // Map service name to restart key
+  const restartKeyMap: Record<string, string> = {
+    'Clawdbot Gateway': 'gateway',
+    'Voice Server': 'voice',
+    'MC File Server': 'file-server',
+    'Automation Browser': 'browser',
+  };
+  const restartKey = restartKeyMap[service.name];
+  const canRestart = restartKey && restartKey !== 'file-server';
+
   return (
     <div className={`service-card service-card--${service.status}`}>
-      <div className="service-card__icon">{statusIcon}</div>
-      <div className="service-card__info">
-        <div className="service-card__name">{service.name}</div>
-        {service.details && (
-          <div className="service-card__details">{service.details}</div>
-        )}
-        <div className="service-card__meta">
-          Checked {formatDistanceToNow(service.lastCheck, { addSuffix: true })}
+      <div className="service-card__top-row">
+        <div className="service-card__name-row">
+          {statusIcon}
+          <span className="service-card__name">{service.name}</span>
+          {service.details && (
+            <span className="service-card__details">{service.details}</span>
+          )}
         </div>
+        {canRestart && onRestart && (
+          <button 
+            className={`service-restart-btn ${isRestarting ? 'service-restart-btn--spinning' : ''}`}
+            onClick={() => onRestart(restartKey)}
+            disabled={isRestarting}
+            title={`Restart ${service.name}`}
+          >
+            <RotateCcw size={12} className={isRestarting ? 'spin-animation' : ''} />
+            {isRestarting ? 'Restarting...' : 'Restart'}
+          </button>
+        )}
       </div>
+      {voiceMetrics && service.name === 'Voice Server' && (
+        <div className="service-card__voice-stats">
+          <span className="voice-inline-stat">
+            <Phone size={12} style={{ color: voiceMetrics.activeCalls > 0 ? 'var(--sky)' : 'var(--text-dim)' }} />
+            {voiceMetrics.activeCalls} active
+          </span>
+          <span className="voice-inline-stat">
+            {voiceMetrics.totalCalls} today
+          </span>
+        </div>
+      )}
+      {healthHistory && <ServiceUptimeBar history={healthHistory} />}
     </div>
   );
 }
@@ -309,7 +386,7 @@ function SubAgentTimelineRow({ agent }: { agent: SubAgent }) {
    Shows last 4 days with missing indicator
    ═══════════════════════════════════════════════════════ */
 
-function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
+function TelegramDumpsCard({ data, onTriggerDump, isDumping }: { data: TelegramDumpsInfo; onTriggerDump?: () => void; isDumping?: boolean }) {
   // Generate last 4 days for display - use files data directly to avoid timezone issues
   // Show the 4 most recent calendar days, checking if each has a dump
   const [clientDates, setClientDates] = useState<string[]>([]);
@@ -334,6 +411,20 @@ function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
       <div className="system-status__card-header">
         <MessageSquare size={18} style={{ color: 'var(--sky)' }} />
         <h2>Telegram Dumps</h2>
+        {onTriggerDump && (
+          <button 
+            className={`telegram-dump-btn ${isDumping ? 'telegram-dump-btn--running' : ''}`}
+            onClick={onTriggerDump}
+            disabled={isDumping}
+            title="Trigger Telegram dump now"
+          >
+            {isDumping ? (
+              <><RefreshCw size={14} className="spin-animation" /> Dumping...</>
+            ) : (
+              <><Download size={14} /> Dump Now</>
+            )}
+          </button>
+        )}
       </div>
       
       <div className="telegram-dumps-info">
@@ -410,7 +501,6 @@ function TelegramDumpsCard({ data }: { data: TelegramDumpsInfo }) {
 function HeartbeatHealthCard({ data }: { data: HeartbeatHealthInfo }) {
   // Count successful heartbeats in last 24h
   const successCount = data.history24h.filter(h => h.ok).length;
-  const totalCount = data.history24h.length;
   
   return (
     <div className="system-status__card system-status__card--heartbeat">
@@ -420,8 +510,8 @@ function HeartbeatHealthCard({ data }: { data: HeartbeatHealthInfo }) {
         <StatusBadge status={data.status} />
       </div>
       
-      {/* Note about workaround */}
-      <div className="heartbeat-workaround-note" style={{ 
+      {/* Note about trigger method */}
+      <div style={{ 
         fontSize: '11px', 
         color: 'var(--text-dim)', 
         padding: '4px 8px',
@@ -429,7 +519,7 @@ function HeartbeatHealthCard({ data }: { data: HeartbeatHealthInfo }) {
         borderRadius: '4px',
         marginBottom: '8px'
       }}>
-        ⚡ Tracking external launchd trigger (workaround), not internal scheduler
+        ⚡ Triggered via macOS launchd (every 30m)
       </div>
       
       <div className="heartbeat-info">
@@ -475,7 +565,7 @@ function HeartbeatHealthCard({ data }: { data: HeartbeatHealthInfo }) {
             ))}
           </div>
           <div className="heartbeat-history-summary">
-            {successCount}/{totalCount} ✓
+            {successCount}/48 ✓
           </div>
         </div>
       </div>
@@ -681,6 +771,12 @@ export default function SystemStatusTab() {
   const [heartbeatHealth, setHeartbeatHealth] = useState<HeartbeatHealthInfo | null>(null);
   const [memorySystem, setMemorySystem] = useState<MemorySystemInfo | null>(null);
   const [contextUsage, setContextUsage] = useState<ContextUsageInfo | null>(null);
+  
+  // Action states
+  const [serviceHealth, setServiceHealth] = useState<ServiceHealthHistory>({});
+  const [restartingService, setRestartingService] = useState<string | null>(null);
+  const [isDumping, setIsDumping] = useState(false);
+  const [dumpResult, setDumpResult] = useState<string | null>(null);
 
   const generateSampleData = useCallback(() => {
     // Fallback sample services (only used if API fails)
@@ -698,13 +794,13 @@ export default function SystemStatusTab() {
         details: 'Port 6060'
       },
       {
-        name: 'File Server',
+        name: 'MC File Server',
         status: 'unknown',
         lastCheck: new Date(),
         details: 'Port 3456'
       },
       {
-        name: 'Browser Proxy',
+        name: 'Automation Browser',
         status: 'unknown',
         lastCheck: new Date(),
         details: 'Port 18800'
@@ -801,6 +897,65 @@ export default function SystemStatusTab() {
     }
   }, []);
 
+  // Fetch service health history
+  const fetchServiceHealth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/actions?action=service-health');
+      if (res.ok) {
+        const data = await res.json();
+        setServiceHealth(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch service health:', e);
+    }
+  }, []);
+  
+  // Trigger telegram dump
+  const handleTelegramDump = useCallback(async () => {
+    setIsDumping(true);
+    setDumpResult(null);
+    try {
+      const res = await fetch('/api/actions?action=telegram-dump', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        setDumpResult('✅ Dump complete');
+        // Refresh telegram data
+        fetchSystemStatus();
+      } else {
+        setDumpResult(`❌ ${data.error || 'Failed'}`);
+      }
+    } catch (e) {
+      setDumpResult(`❌ ${e}`);
+    } finally {
+      setIsDumping(false);
+      setTimeout(() => setDumpResult(null), 5000);
+    }
+  }, []);
+  
+  // Restart a service
+  const handleRestartService = useCallback(async (serviceKey: string) => {
+    setRestartingService(serviceKey);
+    try {
+      const res = await fetch('/api/actions?action=restart-service', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service: serviceKey }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        console.error('Restart failed:', data.error);
+      }
+      // Wait a bit then refresh services
+      setTimeout(() => {
+        checkLiveServices();
+        setRestartingService(null);
+      }, 5000);
+    } catch (e) {
+      console.error('Restart error:', e);
+      setRestartingService(null);
+    }
+  }, []);
+
   const checkLiveServices = useCallback(async () => {
     // Fetch service status from our API (which runs on the server and can check localhost)
     try {
@@ -829,7 +984,7 @@ export default function SystemStatusTab() {
     // Load real data first, fall back to sample data only if API fails
     const initializeData = async () => {
       try {
-        await Promise.all([checkLiveServices(), fetchSystemStatus()]);
+        await Promise.all([checkLiveServices(), fetchSystemStatus(), fetchServiceHealth()]);
       } catch (e) {
         console.error('API failed, using sample data:', e);
         generateSampleData();
@@ -843,15 +998,16 @@ export default function SystemStatusTab() {
     const interval = setInterval(() => {
       checkLiveServices();
       fetchSystemStatus();
+      fetchServiceHealth();
       setLastRefresh(new Date());
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [generateSampleData, checkLiveServices, fetchSystemStatus]);
+  }, [generateSampleData, checkLiveServices, fetchSystemStatus, fetchServiceHealth]);
 
   const handleRefresh = () => {
     setLoading(true);
-    Promise.all([checkLiveServices(), fetchSystemStatus()]).then(() => {
+    Promise.all([checkLiveServices(), fetchSystemStatus(), fetchServiceHealth()]).then(() => {
       setLoading(false);
       setLastRefresh(new Date());
     });
@@ -903,19 +1059,46 @@ export default function SystemStatusTab() {
             <h2>Services</h2>
           </div>
           <div className="services-list">
-            {services.map(service => (
-              <ServiceCard key={service.name} service={service} />
-            ))}
+            {services.map(service => {
+              const healthKeyMap: Record<string, string> = {
+                'Clawdbot Gateway': 'gateway',
+                'Voice Server': 'voice',
+                'MC File Server': 'file-server',
+                'Automation Browser': 'browser',
+              };
+              const healthKey = healthKeyMap[service.name];
+              return (
+                <ServiceCard 
+                  key={service.name} 
+                  service={service} 
+                  healthHistory={healthKey ? serviceHealth[healthKey] : undefined}
+                  onRestart={handleRestartService}
+                  isRestarting={restartingService === healthKeyMap[service.name]}
+                  voiceMetrics={service.name === 'Voice Server' ? voiceMetrics : undefined}
+                />
+              );
+            })}
           </div>
         </div>
 
-        {/* Voice Server */}
-        <div className="system-status__card system-status__card--voice">
-          <VoiceServerCard metrics={voiceMetrics} />
-        </div>
-
         {/* Telegram Dumps */}
-        {telegramDumps && <TelegramDumpsCard data={telegramDumps} />}
+        {telegramDumps && (
+          <div>
+            <TelegramDumpsCard data={telegramDumps} onTriggerDump={handleTelegramDump} isDumping={isDumping} />
+            {dumpResult && (
+              <div style={{ 
+                padding: '6px 12px', 
+                marginTop: '4px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                background: dumpResult.startsWith('✅') ? 'var(--emerald-dim)' : 'var(--red-dim)',
+                color: dumpResult.startsWith('✅') ? 'var(--emerald)' : 'var(--red)',
+              }}>
+                {dumpResult}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Heartbeat Health */}
         {heartbeatHealth && <HeartbeatHealthCard data={heartbeatHealth} />}

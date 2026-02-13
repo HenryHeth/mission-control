@@ -171,6 +171,19 @@ const SERVICE_CATALOG: ServiceCost[] = [
     color: COLORS.other,
   },
   {
+    id: 'neon',
+    name: 'Neon (Postgres)',
+    category: 'infrastructure',
+    icon: <Database size={16} />,
+    todayCost: 0,
+    weekCost: 0,
+    monthCost: 0,
+    billingType: 'subscription',
+    apiAvailable: false,
+    dashboardUrl: 'https://console.neon.tech/app/projects',
+    color: COLORS.other,
+  },
+  {
     id: 'brave',
     name: 'Brave Search',
     category: 'infrastructure',
@@ -546,12 +559,22 @@ export default function SpendingTab() {
       </div>
 
       {/* Burn Rate */}
-      <div className="spending__burn-section">
+      <div className="spending__burn-section" style={{ position: 'relative' }}>
+        {dataSource === 'sample' && (
+          <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', color: '#F87171', fontWeight: 700, zIndex: 10 }}>
+            ❌ NOT LIVE
+          </div>
+        )}
         <BurnRateBar current={totals.today} limit={50} label="TODAY'S BURN" />
       </div>
 
       {/* Summary Cards */}
-      <div className="spending__summary">
+      <div className="spending__summary" style={{ position: 'relative' }}>
+        {dataSource === 'sample' && (
+          <div style={{ position: 'absolute', top: -4, right: 0, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', color: '#F87171', fontWeight: 700, zIndex: 10 }}>
+            ❌ NOT LIVE
+          </div>
+        )}
         <div className="summary-card">
           <div className="summary-card__label">Today</div>
           <div className="summary-card__value">${totals.today.toFixed(2)}</div>
@@ -567,7 +590,12 @@ export default function SpendingTab() {
       </div>
 
       {/* 7-Day Trend Chart */}
-      <div className="spending__card">
+      <div className="spending__card" style={{ position: 'relative' }}>
+        {dataSource === 'sample' && (
+          <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', color: '#F87171', fontWeight: 700, zIndex: 10 }}>
+            ❌ NOT LIVE
+          </div>
+        )}
         <div className="spending__card-header">
           <TrendingUp size={18} style={{ color: 'var(--sky)' }} />
           <h2>7-Day Trend</h2>
@@ -599,7 +627,12 @@ export default function SpendingTab() {
 
       {/* Category Breakdown */}
       <div className="spending__grid">
-        <div className="spending__card spending__card--pie">
+        <div className="spending__card spending__card--pie" style={{ position: 'relative' }}>
+          {dataSource === 'sample' && (
+            <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', color: '#F87171', fontWeight: 700, zIndex: 10 }}>
+              ❌ NOT LIVE
+            </div>
+          )}
           <div className="spending__card-header">
             <DollarSign size={18} style={{ color: 'var(--emerald)' }} />
             <h2>By Category</h2>
@@ -694,7 +727,12 @@ export default function SpendingTab() {
       </div>
 
       {/* Service List */}
-      <div className="spending__services">
+      <div className="spending__services" style={{ position: 'relative' }}>
+        {dataSource === 'sample' && (
+          <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', color: '#F87171', fontWeight: 700, zIndex: 10 }}>
+            ❌ NOT LIVE
+          </div>
+        )}
         <div className="spending__card-header">
           <Server size={18} style={{ color: 'var(--purple)' }} />
           <h2>Service Catalog ({filteredServices.length})</h2>

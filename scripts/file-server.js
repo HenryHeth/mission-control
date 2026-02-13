@@ -12,6 +12,17 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 
+// Load .env from clawd root
+const envPath = path.join(__dirname, '..', '..', '.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const match = line.match(/^([^#=]+)=(.*)$/);
+    if (match && !process.env[match[1].trim()]) {
+      process.env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, '');
+    }
+  });
+}
+
 // Try to load toodledo_client (may not be available in all environments)
 let toodledoClient = null;
 try {
@@ -457,11 +468,160 @@ async function fetchCalendarEvents() {
 }
 
 // Aggregate dashboard data
+// Fetch RescueTime data — 7-day averages + today's values
+async function fetchRescueTime() {
+  const apiKey = process.env.RESCUETIME_API_KEY;
+  if (!apiKey) return null;
+  const today = new Date().toLocaleDateString('en-CA');
+  const weekAgo = new Date(Date.now() - 6 * 86400000).toLocaleDateString('en-CA');
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+
+    // Fetch 7-day ranges + today's activity for YouTube
+    const [summaryRes, computerRes, mobileRes, activityRes, todayComputerRes, todayMobileRes, todayActivityRes] = await Promise.all([
+      fetch(`https://www.rescuetime.com/anapi/daily_summary_feed?key=${apiKey}`, { signal: controller.signal }),
+      fetch(`https://www.rescuetime.com/anapi/data?key=${apiKey}&perspective=interval&restrict_kind=overview&restrict_source_type=computers&restrict_begin=${weekAgo}&restrict_end=${today}&format=json`, { signal: controller.signal }),
+      fetch(`https://www.rescuetime.com/anapi/data?key=${apiKey}&perspective=interval&restrict_kind=overview&restrict_source_type=mobile&restrict_begin=${weekAgo}&restrict_end=${today}&format=json`, { signal: controller.signal }),
+      fetch(`https://www.rescuetime.com/anapi/data?key=${apiKey}&perspective=rank&restrict_kind=activity&restrict_begin=${weekAgo}&restrict_end=${today}&format=json`, { signal: controller.signal }),
+      fetch(`https://www.rescuetime.com/anapi/data?key=${apiKey}&perspective=interval&restrict_kind=overview&restrict_source_type=computers&restrict_begin=${today}&restrict_end=${today}&format=json`, { signal: controller.signal }),
+      fetch(`https://www.rescuetime.com/anapi/data?key=${apiKey}&perspective=interval&restrict_kind=overview&restrict_source_type=mobile&restrict_begin=${today}&restrict_end=${today}&format=json`, { signal: controller.signal }),
+      fetch(`https://www.rescuetime.com/anapi/data?key=${apiKey}&perspective=rank&restrict_kind=activity&restrict_begin=${today}&restrict_end=${today}&format=json`, { signal: controller.signal }),
+    ]);
+    clearTimeout(timeout);
+
+    // Helper: sum seconds from rows, group by day, return {total, dailyAvg, days}
+    const sumByDay = (data) => {
+      const byDay = {};
+      data.rows?.forEach(r => { const d = r[0].slice(0, 10); byDay[d] = (byDay[d] || 0) + r[1]; });
+      const days = Object.keys(byDay).length || 1;
+      const total = Object.values(byDay).reduce((a, b) => a + b, 0);
+      return { total: total / 3600, avg: total / 3600 / days, days };
+    };
+
+    const sumTotal = (data) => {
+      let total = 0;
+      data.rows?.forEach(r => total += r[1]);
+      return total / 3600;
+    };
+
+    // Productivity pulse (avg from daily summaries)
+    let pulseSum = 0, pulseCount = 0;
+    if (summaryRes.ok) {
+      const summary = await summaryRes.json();
+      summary?.slice(0, 7).forEach(d => { if (d.productivity_pulse) { pulseSum += d.productivity_pulse; pulseCount++; } });
+    }
+
+    // 7-day computer
+    const computer7d = computerRes.ok ? sumByDay(await computerRes.json()) : { avg: 0 };
+    // 7-day mobile
+    const mobile7d = mobileRes.ok ? sumByDay(await mobileRes.json()) : { avg: 0 };
+    // 7-day YouTube
+    let youtube7dTotal = 0;
+    if (activityRes.ok) {
+      const data = await activityRes.json();
+      data.rows?.filter(r => r[3]?.toLowerCase().includes('youtube')).forEach(r => youtube7dTotal += r[1]);
+    }
+
+    // Today's values
+    const todayComputer = todayComputerRes.ok ? sumTotal(await todayComputerRes.json()) : 0;
+    const todayMobile = todayMobileRes.ok ? sumTotal(await todayMobileRes.json()) : 0;
+    let todayYoutube = 0;
+    if (todayActivityRes.ok) {
+      const data = await todayActivityRes.json();
+      data.rows?.filter(r => r[3]?.toLowerCase().includes('youtube')).forEach(r => todayYoutube += r[1]);
+    }
+
+    return {
+      // 7-day daily averages (for the "Last 7 Days" card)
+      computer7dAvg: parseFloat(computer7d.avg.toFixed(1)),
+      mobile7dAvg: parseFloat(mobile7d.avg.toFixed(1)),
+      youtube7dAvg: parseFloat((youtube7dTotal / 3600 / 7).toFixed(1)),
+      pulse7dAvg: pulseCount > 0 ? Math.round(pulseSum / pulseCount) : 0,
+      // Today's values (for reference)
+      computerToday: parseFloat(todayComputer.toFixed(1)),
+      mobileToday: parseFloat(todayMobile.toFixed(1)),
+      youtubeToday: parseFloat((todayYoutube / 3600).toFixed(1)),
+    };
+  } catch (e) {
+    console.error('RescueTime fetch error:', e.message);
+    return null;
+  }
+}
+
+// Fetch Home Assistant desk sensor
+// Fetch today's desk time from Home Assistant
+async function fetchDeskTime() {
+  const token = process.env.HOME_ASSISTANT_TOKEN;
+  if (!token) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('http://192.168.1.96:8123/api/states/sensor.sitting_at_desk', {
+      signal: controller.signal,
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return parseFloat(parseFloat(data.state).toFixed(1));
+  } catch (e) {
+    console.error('Home Assistant fetch error:', e.message);
+    return null;
+  }
+}
+
+// Fetch desk time history from Home Assistant (up to 60 days)
+async function fetchDeskTimeHistory(days = 7) {
+  const token = process.env.HOME_ASSISTANT_TOKEN;
+  if (!token) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+    const startStr = start.toISOString().slice(0, 19);
+    const endStr = new Date().toISOString().slice(0, 19);
+    const res = await fetch(
+      `http://192.168.1.96:8123/api/history/period/${startStr}?filter_entity_id=sensor.sitting_at_desk&minimal_response&no_attributes&end_time=${endStr}`,
+      { signal: controller.signal, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data[0]) return null;
+
+    // Group by LOCAL date, get max value per day (cumulative sensor resets daily)
+    const byDay = {};
+    data[0].forEach(p => {
+      const ts = p.last_changed || p.last_updated || '';
+      if (!ts) return;
+      // Convert UTC timestamp to local date string
+      const localDate = new Date(ts).toLocaleDateString('en-CA'); // YYYY-MM-DD in local TZ
+      const val = parseFloat(p.state);
+      if (localDate && !isNaN(val)) {
+        if (!byDay[localDate] || val > byDay[localDate]) byDay[localDate] = val;
+      }
+    });
+    return Object.entries(byDay).sort().map(([date, hours]) => ({
+      date,
+      hours: parseFloat(hours.toFixed(1)),
+    }));
+  } catch (e) {
+    console.error('HA history fetch error:', e.message);
+    return null;
+  }
+}
+
 async function fetchDashboardData() {
-  const [tasks, weather, calendar] = await Promise.all([
+  // Fetch all data in parallel, with short timeouts on non-critical sources
+  const [tasks, weather, calendar, rescueTime, deskTime, deskHistory] = await Promise.all([
     toodledoClient ? fetchToodledoTasks() : Promise.resolve(generateSampleTaskData()),
-    fetchWeather('Vancouver'),
-    fetchCalendarEvents(),
+    fetchWeather('Vancouver').catch(() => ({ available: false })),
+    fetchCalendarEvents().catch(() => ({ available: false })),
+    fetchRescueTime().catch(() => null),
+    fetchDeskTime().catch(() => null),
+    fetchDeskTimeHistory(7).catch(() => null),
   ]);
 
   // Calculate task summary
@@ -477,13 +637,41 @@ async function fetchDashboardData() {
     totalOpen: tasks.totalOpen || 0,
   };
 
-  return {
+  // Build metrics from live sources
+  const metrics = {};
+  if (deskTime !== null) metrics.deskToday = deskTime;
+  if (deskHistory) {
+    metrics.deskHistory = deskHistory;
+    // Calculate 7-day desk average from history
+    const last7 = deskHistory.slice(-7);
+    metrics.desk7dAvg = parseFloat((last7.reduce((s, d) => s + d.hours, 0) / last7.length).toFixed(1));
+  }
+  if (rescueTime) {
+    // 7-day averages for "Last 7 Days" card
+    metrics.computer = rescueTime.computer7dAvg;
+    metrics.mobile = rescueTime.mobile7dAvg;
+    metrics.youtube = rescueTime.youtube7dAvg;
+    metrics.productivityPulse = rescueTime.pulse7dAvg;
+    // Today's values for reference
+    metrics.computerToday = rescueTime.computerToday;
+    metrics.mobileToday = rescueTime.mobileToday;
+    metrics.youtubeToday = rescueTime.youtubeToday;
+  }
+
+  const result = {
     generatedAt: new Date().toISOString(),
     source: 'live',
     tasks: taskSummary,
     weather,
     calendar,
   };
+
+  // Only include metrics if we have any live data
+  if (Object.keys(metrics).length > 0) {
+    result.metrics = metrics;
+  }
+
+  return result;
 }
 
 // Fetch system status
@@ -536,7 +724,7 @@ async function fetchSystemStatus() {
 const server = http.createServer((req, res) => {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
@@ -556,8 +744,75 @@ const server = http.createServer((req, res) => {
   }
   
   if (url.pathname.startsWith('/api/files/')) {
-    // Get specific file content
     const filePath = decodeURIComponent(url.pathname.slice('/api/files/'.length));
+    
+    // PUT: Save file with backup
+    if (req.method === 'PUT') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const { content, backup } = JSON.parse(body);
+          if (typeof content !== 'string') {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Content must be a string' }));
+            return;
+          }
+          
+          // Resolve full path (only allow workspace files)
+          let fullPath;
+          if (['MEMORY.md', 'SOUL.md', 'TOOLS.md', 'USER.md', 'AGENTS.md', 'HEARTBEAT.md', 'IDENTITY.md'].includes(filePath)) {
+            fullPath = path.join(CLAWD_ROOT, filePath);
+          } else if (filePath.startsWith('memory/') || filePath.startsWith('docs/')) {
+            fullPath = path.join(CLAWD_ROOT, filePath);
+          } else {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'File not editable' }));
+            return;
+          }
+          
+          if (!fs.existsSync(fullPath)) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'File not found' }));
+            return;
+          }
+          
+          // Create backup if requested (or always for safety)
+          const backupDir = path.join(CLAWD_ROOT, '.backups');
+          if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+          
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const safeName = filePath.replace(/\//g, '_');
+          const backupPath = path.join(backupDir, `${safeName}.${timestamp}.bak`);
+          
+          if (backup !== false) {
+            // Always create backup unless explicitly opted out
+            fs.copyFileSync(fullPath, backupPath);
+            console.log(`Backup created: ${backupPath}`);
+          }
+          
+          // Write the new content
+          fs.writeFileSync(fullPath, content, 'utf8');
+          console.log(`File saved: ${fullPath} (${content.length} bytes)`);
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ 
+            ok: true, 
+            path: filePath, 
+            size: content.length, 
+            backupPath: backup !== false ? backupPath : null,
+            savedAt: new Date().toISOString()
+          }));
+        } catch (e) {
+          console.error('Save error:', e.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+    
+    // GET: Read specific file content
     const fileData = getFileContent(filePath);
     
     if (fileData) {
@@ -736,10 +991,253 @@ const server = http.createServer((req, res) => {
     return;
   }
   
+  // ═══════════════════════════════════════════════════
+  // POST Actions: Telegram Dump, Service Restart
+  // ═══════════════════════════════════════════════════
+  
+  if (req.method === 'POST' && url.pathname === '/api/actions/telegram-dump') {
+    // Trigger a telegram dump via qmd update
+    const { exec } = require('child_process');
+    const bunPath = path.join(process.env.HOME || '', '.bun/bin');
+    exec(
+      `export PATH="${bunPath}:$PATH" && cd "${CLAWD_ROOT}" && qmd update`,
+      { timeout: 30000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          console.error('Telegram dump error:', err.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: err.message, stderr }));
+        } else {
+          console.log('Telegram dump triggered:', stdout.trim());
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, output: stdout.trim() }));
+        }
+      }
+    );
+    return;
+  }
+  
+  if (req.method === 'POST' && url.pathname === '/api/actions/restart-service') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { service } = JSON.parse(body);
+        const { exec } = require('child_process');
+        
+        const commands = {
+          'voice': `pkill -f "node.*voice-realtime" 2>/dev/null; sleep 1; cd "${path.join(CLAWD_ROOT, 'voice-realtime')}" && nohup node index.js > /dev/null 2>&1 &`,
+          'gateway': `clawdbot gateway restart`,
+          'file-server': null, // Can't restart ourselves
+          'browser': `pkill -f "Brave.*remote-debugging" 2>/dev/null; sleep 2; open -a "Brave Browser" --args --remote-debugging-port=18800 --user-data-dir="${path.join(process.env.HOME || '', '.clawdbot/browser/clawd/user-data')}"`,
+        };
+        
+        if (!service || !commands[service]) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `Unknown service: ${service}. Valid: ${Object.keys(commands).join(', ')}` }));
+          return;
+        }
+        
+        if (service === 'file-server') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Cannot restart self — use process manager' }));
+          return;
+        }
+        
+        exec(commands[service], { timeout: 15000 }, (err, stdout, stderr) => {
+          if (err && service !== 'voice') { // voice pkill returns non-zero if no process, that's ok
+            console.error(`Restart ${service} error:`, err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: err.message }));
+          } else {
+            console.log(`Restarted ${service}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, service, message: `${service} restart initiated` }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+  
+  // Persistent heartbeat data endpoint
+  if (url.pathname === '/api/heartbeat-history') {
+    try {
+      const data = captureHeartbeatData(); // Always fresh scan
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ timestamps: data, count: data.length }));
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ timestamps: [], count: 0 }));
+    }
+    return;
+  }
+  
+  // Service uptime history endpoint
+  if (url.pathname === '/api/service-health') {
+    const historyPath = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'service-health-history.json');
+    try {
+      if (fs.existsSync(historyPath)) {
+        const data = fs.readFileSync(historyPath, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(data);
+      } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({}));
+      }
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({}));
+    }
+    return;
+  }
+  
   // Not found
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not found' }));
 });
+
+// ═══════════════════════════════════════════════════
+// Service Health Tracker — records uptime every 5 min
+// ═══════════════════════════════════════════════════
+const HEALTH_HISTORY_PATH = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'service-health-history.json');
+
+async function checkServiceHealth(url, timeoutMs = 3000) {
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(tid);
+    return res.ok || res.status < 500;
+  } catch { return false; }
+}
+
+const HEARTBEAT_PERSISTENT_PATH = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'heartbeat-persistent.json');
+const GATEWAY_LOG_PATH = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'gateway.log');
+const HEARTBEAT_LAST_RUN_PATH = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'heartbeat-last-run.json');
+
+// Scan gateway log + heartbeat-last-run for heartbeat timestamps
+// Merges into persistent store that survives session restarts
+function captureHeartbeatData() {
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  
+  // Load existing persistent data
+  let timestamps = new Set();
+  try {
+    if (fs.existsSync(HEARTBEAT_PERSISTENT_PATH)) {
+      const data = JSON.parse(fs.readFileSync(HEARTBEAT_PERSISTENT_PATH, 'utf8'));
+      if (Array.isArray(data)) {
+        data.forEach(ts => {
+          if (new Date(ts).getTime() > sevenDaysAgo) timestamps.add(ts);
+        });
+      }
+    }
+  } catch {}
+  
+  // Source 1: Gateway log — scan for [heartbeat] started entries
+  try {
+    if (fs.existsSync(GATEWAY_LOG_PATH)) {
+      const content = fs.readFileSync(GATEWAY_LOG_PATH, 'utf8');
+      const lines = content.split('\n');
+      for (const line of lines) {
+        const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+\[heartbeat\]\s+started/);
+        if (match) {
+          const ts = match[1];
+          if (new Date(ts).getTime() > sevenDaysAgo) {
+            timestamps.add(ts);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error reading gateway log for heartbeats:', e.message);
+  }
+  
+  // Source 2: heartbeat-last-run.json (written by Henry during heartbeat)
+  try {
+    if (fs.existsSync(HEARTBEAT_LAST_RUN_PATH)) {
+      const data = JSON.parse(fs.readFileSync(HEARTBEAT_LAST_RUN_PATH, 'utf8'));
+      if (data.lastRun) {
+        const ts = new Date(data.lastRun).toISOString();
+        if (new Date(ts).getTime() > sevenDaysAgo) {
+          timestamps.add(ts);
+        }
+      }
+    }
+  } catch {}
+  
+  // Source 3: heartbeat-history.json (session-scoped, may have extras)
+  const historyPath = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'heartbeat-history.json');
+  try {
+    if (fs.existsSync(historyPath)) {
+      const data = JSON.parse(fs.readFileSync(historyPath, 'utf8'));
+      if (Array.isArray(data)) {
+        data.forEach(ts => {
+          if (new Date(ts).getTime() > sevenDaysAgo) {
+            timestamps.add(new Date(ts).toISOString());
+          }
+        });
+      }
+    }
+  } catch {}
+  
+  // Deduplicate (within 2 min = same heartbeat)
+  const sorted = [...timestamps].map(t => new Date(t)).sort((a, b) => a - b);
+  const deduped = [];
+  for (const ts of sorted) {
+    if (deduped.length === 0 || ts.getTime() - deduped[deduped.length - 1].getTime() > 2 * 60 * 1000) {
+      deduped.push(ts);
+    }
+  }
+  
+  // Write persistent file
+  const result = deduped.map(d => d.toISOString());
+  const dir = path.dirname(HEARTBEAT_PERSISTENT_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(HEARTBEAT_PERSISTENT_PATH, JSON.stringify(result));
+  
+  return result;
+}
+
+async function recordServiceHealth() {
+  const now = new Date().toISOString();
+  const checks = {
+    gateway: await checkServiceHealth('http://127.0.0.1:18789/'),
+    voice: await checkServiceHealth('http://127.0.0.1:6060/'),
+    'file-server': true, // We're running, so yes
+    browser: await checkServiceHealth('http://127.0.0.1:18800/json/version'),
+  };
+  
+  let history = {};
+  try {
+    if (fs.existsSync(HEALTH_HISTORY_PATH)) {
+      history = JSON.parse(fs.readFileSync(HEALTH_HISTORY_PATH, 'utf8'));
+    }
+  } catch {}
+  
+  const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+  
+  for (const [service, isUp] of Object.entries(checks)) {
+    if (!history[service]) history[service] = [];
+    history[service].push({ time: now, ok: isUp });
+    // Keep only last 24h (288 entries at 5min intervals)
+    history[service] = history[service].filter(e => new Date(e.time).getTime() > twentyFourHoursAgo);
+  }
+  
+  const dir = path.dirname(HEALTH_HISTORY_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(HEALTH_HISTORY_PATH, JSON.stringify(history, null, 2));
+  
+  // Also capture heartbeat data every check
+  captureHeartbeatData();
+}
+
+// Record health on startup and every 5 minutes
+recordServiceHealth();
+setInterval(recordServiceHealth, 5 * 60 * 1000);
 
 server.listen(PORT, () => {
   console.log(`

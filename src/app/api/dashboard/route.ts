@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     // Fetch from file-server (server-side, so localhost works)
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), 25000);
     
     const res = await fetch(`${FILE_SERVER_URL}/api/dashboard`, {
       signal: controller.signal,

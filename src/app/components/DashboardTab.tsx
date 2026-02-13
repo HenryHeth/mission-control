@@ -229,6 +229,8 @@ function DarkTooltip({ active, payload, label }: { active?: boolean; payload?: A
 export default function DashboardTab() {
   const [loading, setLoading] = useState(true);
   const [dataSource, setDataSource] = useState<'live' | 'sample'>('sample');
+  const [tasksLive, setTasksLive] = useState(false);
+  const [metricsLive, setMetricsLive] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
   // Metric states
@@ -337,7 +339,7 @@ export default function DashboardTab() {
     // Try live API first
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
+      const timeout = setTimeout(() => controller.abort(), 20000);
       const res = await fetch(`${LIVE_API_URL}/api/dashboard`, { signal: controller.signal });
       clearTimeout(timeout);
       
@@ -357,6 +359,7 @@ export default function DashboardTab() {
             // Set briefing data from live API
             setWeeklyAvg(data.tasks.weeklyAvg || Math.round(weekComplete * 0.9));
             setOldTasks(data.tasks.oldTasks || 0);
+            setTasksLive(true);
           }
           
           // Use live weather data for productivity pulse visual
@@ -365,50 +368,58 @@ export default function DashboardTab() {
             setProductivityPulse(Math.min(100, Math.max(20, data.weather.temp_c * 4 + 40)));
           }
           
-          // Use live metrics from RescueTime + Home Assistant
+          // Use live metrics from RescueTime + Home Assistant (7-day averages)
           if (data.metrics) {
             const liveMetrics: MetricData[] = [
               {
                 label: 'DESK',
-                value: data.metrics.desk ?? 0,
+                value: data.metrics.desk7dAvg ?? data.metrics.deskToday ?? 0,
                 goal: 4,
-                unit: 'h',
+                unit: 'h/d',
                 color: 'var(--amber)',
                 icon: <Monitor size={16} />,
               },
               {
                 label: 'COMPUTER',
                 value: data.metrics.computer ?? 0,
-                unit: 'h',
+                unit: 'h/d',
                 color: 'var(--sky)',
                 icon: <Monitor size={16} />,
               },
               {
                 label: 'MOBILE',
                 value: data.metrics.mobile ?? 0,
-                unit: 'h',
+                unit: 'h/d',
                 color: 'var(--emerald)',
                 icon: <Smartphone size={16} />,
               },
               {
                 label: 'YOUTUBE',
                 value: data.metrics.youtube ?? 0,
-                unit: 'h',
+                unit: 'h/d',
                 color: 'var(--red)',
                 icon: <Youtube size={16} />,
               }
             ];
             setMetrics(liveMetrics);
+            setMetricsLive(true);
             
-            // Set sitting data for chart (today's value)
+            // Set sitting data for chart from live history
             const today = new Date();
             const sittingToday: DailySitting[] = [];
+            const historyMap: Record<string, number> = {};
+            if (data.metrics.deskHistory) {
+              data.metrics.deskHistory.forEach((entry: { date: string; hours: number }) => {
+                historyMap[entry.date] = entry.hours;
+              });
+            }
             for (let i = 6; i >= 0; i--) {
               const d = subDays(today, i);
+              const dateStr = format(d, 'yyyy-MM-dd');
               sittingToday.push({
-                date: format(d, 'yyyy-MM-dd'),
+                date: dateStr,
                 label: format(d, 'EEE'),
-                hours: i === 0 ? (data.metrics.desk ?? 0) : (3 + Math.random() * 3) // Today is real, rest estimated
+                hours: historyMap[dateStr] ?? (i === 0 ? (data.metrics.deskToday ?? 0) : 0)
               });
             }
             setSittingData(sittingToday);
@@ -528,8 +539,8 @@ export default function DashboardTab() {
           <h1>Mission Control</h1>
         </div>
         <div className="dashboard__meta">
-          <span className={`source-badge source-badge--${dataSource === 'live' ? 'live' : 'bundled'}`}>
-            {dataSource === 'live' ? '🟢 Live' : '🟡 Sample Data'}
+          <span className={`source-badge source-badge--${tasksLive && metricsLive ? 'live' : tasksLive ? 'bundled' : 'bundled'}`}>
+            {tasksLive && metricsLive ? '🟢 Live' : tasksLive ? '🟡 Tasks Live · Metrics Sample' : '🟡 Sample Data'}
           </span>
           <span className="dashboard__updated">
             <RefreshCw size={12} />
@@ -548,7 +559,12 @@ export default function DashboardTab() {
       {/* Main Grid */}
       <div className="dashboard__grid">
         {/* Last 7 Days Metrics */}
-        <div className="dashboard__card dashboard__card--metrics">
+        <div className="dashboard__card dashboard__card--metrics" style={{ position: 'relative' }}>
+          {!metricsLive && (
+            <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', color: '#F87171', fontWeight: 700, zIndex: 10 }}>
+              ❌ NOT LIVE — needs RescueTime + Home Assistant
+            </div>
+          )}
           <div className="dashboard__card-header">
             <Activity size={18} style={{ color: 'var(--sky)' }} />
             <h2>Last 7 Days</h2>
@@ -575,7 +591,12 @@ export default function DashboardTab() {
         </div>
 
         {/* Tasks Summary */}
-        <div className="dashboard__card dashboard__card--tasks">
+        <div className="dashboard__card dashboard__card--tasks" style={{ position: 'relative' }}>
+          {!tasksLive && (
+            <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', color: '#F87171', fontWeight: 700, zIndex: 10 }}>
+              ❌ NOT LIVE
+            </div>
+          )}
           <div className="dashboard__card-header">
             <CheckCircle2 size={18} style={{ color: 'var(--emerald)' }} />
             <h2>Tasks</h2>
@@ -623,7 +644,12 @@ export default function DashboardTab() {
         </div>
 
         {/* Sitting Chart */}
-        <div className="dashboard__card dashboard__card--chart">
+        <div className="dashboard__card dashboard__card--chart" style={{ position: 'relative' }}>
+          {!metricsLive && (
+            <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', color: '#F87171', fontWeight: 700, zIndex: 10 }}>
+              ❌ NOT LIVE — needs Home Assistant
+            </div>
+          )}
           <div className="dashboard__card-header">
             <Monitor size={18} style={{ color: 'var(--amber)' }} />
             <h2>Desk Time (7 days)</h2>
@@ -644,7 +670,7 @@ export default function DashboardTab() {
                   tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
                   axisLine={false}
                   tickLine={false}
-                  domain={[0, 8]}
+                  domain={[0, 'auto']}
                 />
                 <Tooltip content={<DarkTooltip />} />
                 <Bar 
