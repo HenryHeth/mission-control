@@ -234,7 +234,7 @@ export default function TasksTab() {
   const recentCloses = useMemo(() => {
     if (!data) return [];
     return [...data.completed]
-      .sort((a, b) => b.completed - a.completed)
+      .sort((a, b) => (b.modified || b.completed) - (a.modified || a.completed))
       .slice(0, 15);
   }, [data]);
 
@@ -520,7 +520,7 @@ export default function TasksTab() {
                   <span className="recent-item__title">{task.title}</span>
                   <span className="recent-item__meta">
                     <span className="recent-item__folder">{task.folder}</span>
-                    {formatDistanceToNow(new Date(task.completed * 1000), { addSuffix: true })}
+                    {formatDistanceToNow(new Date((task.modified || task.completed) * 1000), { addSuffix: true })}
                   </span>
                 </div>
               </div>

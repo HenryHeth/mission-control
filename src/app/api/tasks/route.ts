@@ -94,10 +94,11 @@ export async function GET() {
     );
     const completed = (Array.isArray(completedRaw) ? completedRaw : [])
       .filter((t: { title?: string; completed?: number }) => t && t.title && t.completed && t.completed > 0)
-      .map((t: { id: number; title: string; completed: number; added?: number; folder?: number; tag?: string; priority?: number }) => ({
+      .map((t: { id: number; title: string; completed: number; modified?: number; added?: number; folder?: number; tag?: string; priority?: number }) => ({
         id: t.id,
         title: t.title,
         completed: t.completed,
+        modified: t.modified || t.completed,
         added: t.added || 0,
         folder: folderMap[t.folder || 0] || 'Unfiled',
         folderId: t.folder,
