@@ -2005,7 +2005,7 @@ body {
   align-items: center;
   gap: 8px;
   color: var(--text-muted);
-  font-size: 24px;
+  font-size: 14px;
 }
 
 /* ── Service Restart Button ── */

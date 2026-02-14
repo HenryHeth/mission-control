@@ -271,7 +271,7 @@ function ServiceCard({ service, healthHistory, onRestart, isRestarting, voiceMet
           {voiceMetrics.metricsAvailable ? (
             <>
               <span className="voice-inline-stat">
-                <Phone size={28} style={{ color: voiceMetrics.activeCalls > 0 ? 'var(--sky)' : 'var(--text-dim)' }} />
+                <Phone size={16} style={{ color: voiceMetrics.activeCalls > 0 ? 'var(--sky)' : 'var(--text-dim)' }} />
                 {voiceMetrics.activeCalls > 0 ? `${voiceMetrics.activeCalls} active` : 'Idle'}
               </span>
               <span className="voice-inline-stat">
