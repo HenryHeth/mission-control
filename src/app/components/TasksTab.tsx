@@ -30,8 +30,10 @@ interface Task {
   folderId?: number;
   completed: number;
   added: number;
+  modified?: number;
   priority: number;
   duedate?: number;
+  tag?: string;
 }
 
 interface TaskData {
@@ -172,6 +174,7 @@ export default function TasksTab() {
   const [loading, setLoading] = useState(true);
   const [dataSource, setDataSource] = useState<'live' | 'sample'>('sample');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [includeSomeday, setIncludeSomeday] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -203,19 +206,45 @@ export default function TasksTab() {
   }, []);
 
   /* ═══════════════════════════════════════════════════════
+     TASK FILTERING: exclude obsolete (always), someday (toggle)
+     ═══════════════════════════════════════════════════════ */
+  const filteredData = useMemo(() => {
+    if (!data) return null;
+
+    const shouldExclude = (tag?: string): boolean => {
+      if (!tag) return false;
+      const lower = tag.toLowerCase();
+      if (lower.includes('obsolete')) return true;
+      if (!includeSomeday && lower.includes('someday')) return true;
+      return false;
+    };
+
+    const completed = data.completed.filter(t => !shouldExclude(t.tag));
+    const open = data.open.filter(t => !shouldExclude(t.tag));
+
+    return {
+      ...data,
+      completed,
+      open,
+      totalOpen: open.length,
+      totalCompleted: completed.length,
+    };
+  }, [data, includeSomeday]);
+
+  /* ═══════════════════════════════════════════════════════
      LIVE DATA COMPUTATIONS
      ═══════════════════════════════════════════════════════ */
 
   /* ── Task Velocity: daily completions + 7-day moving average ── */
   const velocityData = useMemo(() => {
-    if (!data) return [];
+    if (!filteredData) return [];
     const now = new Date();
     const days: { date: string; label: string; count: number }[] = [];
 
     for (let i = 29; i >= 0; i--) {
       const day = subDays(now, i);
       const dayStr = format(day, 'yyyy-MM-dd');
-      const count = data.completed.filter(t => {
+      const count = filteredData.completed.filter(t => {
         const completedDate = new Date(t.completed * 1000);
         return format(completedDate, 'yyyy-MM-dd') === dayStr;
       }).length;
@@ -228,21 +257,21 @@ export default function TasksTab() {
       const avg = windowSlice.reduce((sum, p) => sum + p.count, 0) / windowSlice.length;
       return { ...d, avg: Math.round(avg * 10) / 10 };
     });
-  }, [data]);
+  }, [filteredData]);
 
   /* ── Recent Closes: last 15 completed tasks ── */
   const recentCloses = useMemo(() => {
-    if (!data) return [];
-    return [...data.completed]
+    if (!filteredData) return [];
+    return [...filteredData.completed]
       .sort((a, b) => (b.modified || b.completed) - (a.modified || a.completed))
       .slice(0, 15);
-  }, [data]);
+  }, [filteredData]);
 
   /* ── New vs Retired: tasks created vs completed per week ── */
   const newVsRetired = useMemo(() => {
-    if (!data) return [];
+    if (!filteredData) return [];
     const now = new Date();
-    const allTasks = [...data.completed, ...data.open];
+    const allTasks = [...filteredData.completed, ...filteredData.open];
     const weeks = [];
 
     for (let i = 7; i >= 0; i--) {
@@ -252,7 +281,7 @@ export default function TasksTab() {
       const endTs = Math.floor(weekEnd.getTime() / 1000);
 
       const created = allTasks.filter(t => t.added >= startTs && t.added < endTs).length;
-      const retired = data.completed.filter(t => t.completed >= startTs && t.completed < endTs).length;
+      const retired = filteredData.completed.filter(t => t.completed >= startTs && t.completed < endTs).length;
 
       weeks.push({
         week: format(weekEnd, 'MMM d'),
@@ -261,18 +290,18 @@ export default function TasksTab() {
       });
     }
     return weeks;
-  }, [data]);
+  }, [filteredData]);
 
   /* ── Backlog Trend: estimated open count over last 60 days ── */
   const backlogData = useMemo(() => {
-    if (!data) return [];
+    if (!filteredData) return [];
     const now = new Date();
-    const allTasks = [...data.completed, ...data.open];
+    const allTasks = [...filteredData.completed, ...filteredData.open];
     const sixtyDaysAgoTs = Math.floor(Date.now() / 1000) - 60 * 86400;
 
     const createdInPeriod = allTasks.filter(t => t.added >= sixtyDaysAgoTs).length;
-    const completedInPeriod = data.completed.length;
-    let runningOpen = data.totalOpen - createdInPeriod + completedInPeriod;
+    const completedInPeriod = filteredData.completed.length;
+    let runningOpen = filteredData.totalOpen - createdInPeriod + completedInPeriod;
 
     const points = [];
     for (let i = 59; i >= 0; i--) {
@@ -282,7 +311,7 @@ export default function TasksTab() {
       const dayEndTs = dayStartTs + 86400;
 
       const createdToday = allTasks.filter(t => t.added >= dayStartTs && t.added < dayEndTs).length;
-      const completedToday = data.completed.filter(t => t.completed >= dayStartTs && t.completed < dayEndTs).length;
+      const completedToday = filteredData.completed.filter(t => t.completed >= dayStartTs && t.completed < dayEndTs).length;
 
       runningOpen += createdToday - completedToday;
       points.push({
@@ -292,7 +321,7 @@ export default function TasksTab() {
       });
     }
     return points;
-  }, [data]);
+  }, [filteredData]);
 
   /* ═══════════════════════════════════════════════════════
      HISTORIC DATA COMPUTATIONS (Year-based)
@@ -300,16 +329,16 @@ export default function TasksTab() {
 
   /* ── Filter tasks by selected year ── */
   const yearlyTasks = useMemo(() => {
-    if (!data) return [];
+    if (!filteredData) return [];
     const start = startOfYear(new Date(selectedYear, 0, 1));
     const end = endOfYear(new Date(selectedYear, 0, 1));
-    return data.completed.filter(t => {
+    return filteredData.completed.filter(t => {
       if (t.completed > 0) {
         return isWithinInterval(fromUnixTime(t.completed), { start, end });
       }
       return false;
     });
-  }, [data, selectedYear]);
+  }, [filteredData, selectedYear]);
 
   /* ── Folder breakdown ── */
   const folderData = useMemo(() => {
@@ -344,26 +373,26 @@ export default function TasksTab() {
 
   /* ── Summary stats ── */
   const stats = useMemo(() => {
-    if (!data) return { open: 0, closedWeek: 0, avgPerDay: '0', overdue: 0, dueToday: 0 };
+    if (!filteredData) return { open: 0, closedWeek: 0, avgPerDay: '0', overdue: 0, dueToday: 0 };
     const nowTs = Math.floor(Date.now() / 1000);
     const weekAgoTs = nowTs - 7 * 86400;
     const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
     const todayEnd = todayStart + 86400;
     
-    const closedThisWeek = data.completed.filter(t => t.completed >= weekAgoTs).length;
+    const closedThisWeek = filteredData.completed.filter(t => t.completed >= weekAgoTs).length;
     const daysInData = 60;
-    const avgPerDay = (data.totalCompleted / daysInData).toFixed(1);
-    const overdue = data.open.filter(t => t.duedate && t.duedate < nowTs).length;
-    const dueToday = data.open.filter(t => t.duedate && t.duedate >= todayStart && t.duedate < todayEnd).length;
+    const avgPerDay = (filteredData.totalCompleted / daysInData).toFixed(1);
+    const overdue = filteredData.open.filter(t => t.duedate && t.duedate < nowTs).length;
+    const dueToday = filteredData.open.filter(t => t.duedate && t.duedate >= todayStart && t.duedate < todayEnd).length;
 
     return {
-      open: data.totalOpen,
+      open: filteredData.totalOpen,
       closedWeek: closedThisWeek,
       avgPerDay,
       overdue,
       dueToday,
     };
-  }, [data]);
+  }, [filteredData]);
 
   /* ── Yearly stats ── */
   const yearlyStats = useMemo(() => {
@@ -383,7 +412,7 @@ export default function TasksTab() {
     );
   }
 
-  if (!data) {
+  if (!data || !filteredData) {
     return (
       <div className="tasks-dashboard">
         <div className="loading-screen">
@@ -404,6 +433,29 @@ export default function TasksTab() {
           <h1>Task Metrics</h1>
         </div>
         <div className="tasks-header__right">
+          <label className="someday-toggle" style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+            fontSize: '0.8rem',
+            color: '#94A3B8',
+            fontWeight: 600,
+            userSelect: 'none',
+          }}>
+            <input
+              type="checkbox"
+              checked={includeSomeday}
+              onChange={(e) => setIncludeSomeday(e.target.checked)}
+              style={{
+                accentColor: 'var(--emerald)',
+                width: '16px',
+                height: '16px',
+                cursor: 'pointer',
+              }}
+            />
+            Include Someday
+          </label>
           <span className={`source-badge source-badge--${dataSource === 'live' ? 'live' : 'bundled'}`}>
             {dataSource === 'live' ? '🟢 Live' : '🟡 Sample Data'}
           </span>
