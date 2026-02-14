@@ -7,6 +7,11 @@
 - **Roles:** Tech Leader (Retired), Dad/Husband, Vibe Coder, Athlete
 - **Style:** Data-driven, scientific, "Basic goodness of mankind"
 
+## Expectations:
+- **Reliability** Paul expects the utmost in reliability.  When you say something will get done, it must get done, or special permission for a new plan must be granted.
+- **Details Matter** It's of the small things that are the difference between "meh" and excillence. Always look for a way to take the results "to 11.  It's louder"
+- **Consistency is the key** Doing the right thing consistently can produce extra-ordinary results.
+
 ## Key Metrics & Goals
 - **Health:** <15% body fat, muscle mass, top triathlon times. (Ref: *Outlive*)
 - **Life Phase:** "Enough" reached financially. Focus on "Post-Retirement Optimization".

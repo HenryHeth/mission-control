@@ -406,7 +406,7 @@ body {
 
 /* ── Markdown Styles ── */
 .md-content h1 {
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 700;
   color: #fff;
   margin-bottom: 16px;
@@ -1802,7 +1802,7 @@ body {
 .system-status {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 24px;
+  padding: 12px 20px;
   background: var(--bg);
 }
 
@@ -1878,31 +1878,39 @@ body {
 .system-status__grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 16px;
+  gap: 12px;
 }
 
 .system-status__card {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: 12px;
   overflow: hidden;
 }
 
-.system-status__card--services { grid-column: span 3; }
-.system-status__card--voice { grid-column: span 3; }
+/* Row 1: Agents(2) + Services(4) + Heartbeat(3) + Context(3) = 12 */
+.system-status__card--agents { grid-column: span 2; }
+.system-status__card--services { grid-column: span 4; }
+.system-status__card--heartbeat { grid-column: span 3; }
+.system-status__card--context { grid-column: span 3; }
+/* Row 2: Memory(6) + Cron(6) = 12 */
+.system-status__card--memory-system { grid-column: span 6; }
 .system-status__card--cron { grid-column: span 6; }
-.system-status__card--agents { grid-column: span 5; }
+/* Row 3: Telegram(4) + Timeline(8) = 12 */
+.system-status__card--telegram { grid-column: span 4; }
+.system-status__card--timeline { grid-column: span 8; }
+.system-status__card--voice { grid-column: span 3; }
 
 .system-status__card-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .system-status__card-header h2 {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--text);
 }
@@ -1930,14 +1938,14 @@ body {
 .services-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
 .service-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
+  gap: 4px;
+  padding: 8px 10px;
   background: var(--bg-subtle);
   border-radius: var(--radius);
   border: 1px solid var(--card-border);
@@ -1986,17 +1994,18 @@ body {
 /* ── Voice Inline Stats ── */
 .service-card__voice-stats {
   display: flex;
-  gap: 12px;
-  padding: 4px 8px;
+  gap: 16px;
+  padding: 6px 10px;
   background: rgba(100,116,139,0.08);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 14px;
 }
 .voice-inline-stat {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   color: var(--text-muted);
+  font-size: 24px;
 }
 
 /* ── Service Restart Button ── */
@@ -2032,9 +2041,9 @@ body {
 }
 .service-uptime-ticks {
   display: flex;
-  gap: 1.5px;
+  gap: 1px;
   flex: 1;
-  height: 18px;
+  height: 12px;
   align-items: flex-end;
 }
 .service-uptime-tick {
@@ -2159,14 +2168,16 @@ body {
 .cron-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 3px;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .cron-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 6px 10px;
   background: var(--bg-subtle);
   border-radius: var(--radius);
 }
@@ -2265,10 +2276,15 @@ body {
   .dashboard__card--chart { grid-column: span 12; }
   .dashboard__card--links { grid-column: span 12; }
   
-  .system-status__card--services { grid-column: span 12; }
-  .system-status__card--voice { grid-column: span 12; }
-  .system-status__card--cron { grid-column: span 6; }
   .system-status__card--agents { grid-column: span 6; }
+  .system-status__card--services { grid-column: span 6; }
+  .system-status__card--heartbeat { grid-column: span 6; }
+  .system-status__card--context { grid-column: span 6; }
+  .system-status__card--memory-system { grid-column: span 6; }
+  .system-status__card--cron { grid-column: span 6; }
+  .system-status__card--telegram { grid-column: span 12; }
+  .system-status__card--timeline { grid-column: span 12; }
+  .system-status__card--voice { grid-column: span 12; }
 }
 
 @media (max-width: 768px) {
@@ -3803,24 +3819,18 @@ body {
    Telegram Dumps, Heartbeat Health, Memory System, Context
    ═══════════════════════════════════════════════════════ */
 
-/* ── Telegram Dumps ── */
-.system-status__card--telegram,
-.system-status__card--heartbeat,
-.system-status__card--memory-system,
-.system-status__card--context {
-  grid-column: span 3;
-}
+/* ── System Status Grid Spans — defined at ~line 1892, do not duplicate ── */
 
 .telegram-dumps-info {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
 .telegram-dumps-row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
 }
 
 .telegram-dumps-label {
@@ -3877,18 +3887,18 @@ body {
 }
 
 .telegram-dumps-recent {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px solid var(--card-border);
 }
 
 .telegram-dumps-recent-label {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .telegram-dumps-file-grid {
@@ -3916,21 +3926,21 @@ body {
   flex: 1;
 }
 
-/* Last 4 Days Display */
+/* Last 4 Days Display — compact 2x2 grid */
 .telegram-dumps-day-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
 }
 
 .telegram-dumps-day-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 4px;
+  padding: 3px 6px;
   background: var(--bg-subtle);
-  border-radius: var(--radius);
-  font-size: 0.8rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
 }
 
 .telegram-dumps-day-item--missing {
@@ -3941,25 +3951,26 @@ body {
 .telegram-dumps-day-date {
   font-weight: 600;
   color: var(--text);
-  min-width: 50px;
 }
 
 .telegram-dumps-day-size {
   flex: 1;
   color: var(--text-muted);
+  text-align: right;
 }
 
 .telegram-dumps-day-missing {
   flex: 1;
   color: var(--amber);
   font-weight: 500;
+  font-size: 0.65rem;
 }
 
 /* ── Heartbeat Health ── */
 .heartbeat-info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .heartbeat-row {
@@ -3990,8 +4001,8 @@ body {
 }
 
 .heartbeat-history {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px solid var(--card-border);
 }
 
@@ -4050,16 +4061,23 @@ body {
 .memory-flow-diagram {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 0;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+.memory-flow-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px 0;
 }
 
 .memory-flow-level {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 8px;
+  padding: 6px 10px;
   background: var(--bg-subtle);
   border-radius: var(--radius);
   width: 100%;
@@ -4081,13 +4099,13 @@ body {
 }
 
 .memory-flow-icon {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--card);
-  border-radius: 10px;
+  border-radius: 8px;
   flex-shrink: 0;
 }
 
@@ -4136,9 +4154,10 @@ body {
 }
 
 .memory-flow-arrow {
-  font-size: 1rem;
+  font-size: 0.7rem;
   color: var(--text-dim);
-  padding: 2px 0;
+  padding: 0;
+  line-height: 1;
   opacity: 0.5;
 }
 
@@ -4279,25 +4298,158 @@ body {
   color: var(--red);
 }
 
-/* ── Grid adjustments for new cards ── */
-@media (min-width: 1200px) {
-  .system-status__grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  
-  .system-status__card--telegram,
-  .system-status__card--heartbeat {
-    grid-column: span 1;
-  }
-  
-  .system-status__card--memory-system {
-    grid-column: span 2;
-  }
-  
-  .system-status__card--context {
-    grid-column: span 1;
-  }
+/* ── Agent Context Sections ── */
+.context-agent-section {
+  padding: 4px 0;
 }
+
+.context-agent-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.context-agent-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.context-agent-model {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  background: rgba(255,255,255,0.04);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.context-agent-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+  margin: 12px 0;
+}
+
+.context-compaction-empty {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* ── Compaction History ── */
+.context-compaction-history {
+  margin-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 10px;
+}
+
+.context-compaction-history-header {
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.context-compaction-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.context-compaction-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.context-compaction-table td {
+  padding: 3px 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.context-compaction-table tr:hover td {
+  background: rgba(255,255,255,0.02);
+}
+
+/* ── Context Card Compact Mode ── */
+.context-agent-section--compact {
+  padding: 4px 0;
+}
+
+.context-agent-section--compact .context-agent-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.context-compact-tokens {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.context-usage-bar-container--compact {
+  margin-bottom: 2px;
+}
+
+.context-compact-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.context-compact-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.context-compact-flush {
+  font-size: 0.72rem;
+}
+
+.context-history-toggle {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  color: var(--sky);
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.context-history-toggle:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.context-compaction-table--compact {
+  margin-top: 6px;
+  font-size: 0.7rem;
+}
+
+.context-compaction-table--compact th,
+.context-compaction-table--compact td {
+  padding: 2px 4px;
+}
+
+/* ── Grid adjustments for new cards ── */
+/* NOTE: Do NOT override grid-template-columns here.
+   The main grid is repeat(12, 1fr) defined at .system-status__grid.
+   Card spans are set above (span 4, span 6, etc.). */
 
 @media (max-width: 1199px) {
   .memory-system-grid {
@@ -5293,4 +5445,83 @@ body {
   .memory-tab {
     white-space: nowrap;
   }
+}
+
+/* ═══════════════════════════════════════════════
+   Agents Card — Multi-Agent Dashboard
+   ═══════════════════════════════════════════════ */
+
+/* grid-column for agents defined at ~line 1892 */
+
+.system-status__card--agents .system-status__card-header {
+  margin-bottom: 8px;
+}
+
+.agents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  flex: 0 1 auto;
+  min-width: 180px;
+}
+
+.agent-card__icon {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(100,116,139,0.1);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.agent-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-card__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-card__role {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  background: rgba(100,116,139,0.15);
+  border-radius: 4px;
+}
+
+.agent-card__model {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.agent-card__heartbeat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--emerald);
 }

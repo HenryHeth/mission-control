@@ -30,7 +30,11 @@ interface VoiceServerMetrics {
   status: 'online' | 'offline' | 'unknown';
   activeCalls: number;
   totalCalls: number;
+  metricsAvailable?: boolean;
   uptime?: number;
+  lastCall?: { timestamp: string; duration: number; caller: string } | null;
+  callsLast24h?: number;
+  callsLast7d?: number;
   lastError?: string;
   lastErrorTime?: Date;
 }
@@ -82,6 +86,17 @@ interface HeartbeatHealthInfo {
   lastHeartbeat: string | null;
   status: 'healthy' | 'stale' | 'unknown';
   history24h: { time: string; ok: boolean }[];
+  agentName?: string;
+  agentModel?: string;
+}
+
+interface AgentInfo {
+  id: string;
+  name: string;
+  model: string;
+  heartbeatEnabled: boolean;
+  heartbeatInterval?: string;
+  workspace: string;
 }
 
 interface MemorySystemInfo {
@@ -106,12 +121,20 @@ interface MemorySystemInfo {
   };
 }
 
-interface ContextUsageInfo {
+interface AgentContextInfo {
+  agentId: string;
+  agentName: string;
+  model: string;
   currentTokens: number;
   maxTokens: number;
   percentUsed: number;
   compactionsToday: number;
   lastCompaction: string | null;
+  compactionHistory: { timestamp: string; tokensBefore: number; percentBefore: number }[];
+}
+
+interface ContextUsageInfo {
+  agents: AgentContextInfo[];
   memoryFlush: {
     enabled: boolean;
     prompt: string;
@@ -214,7 +237,7 @@ function ServiceCard({ service, healthHistory, onRestart, isRestarting, voiceMet
   // Map service name to restart key
   const restartKeyMap: Record<string, string> = {
     'Clawdbot Gateway': 'gateway',
-    'Voice Server': 'voice',
+    'Voice Services': 'voice',
     'MC File Server': 'file-server',
     'Automation Browser': 'browser',
   };
@@ -243,15 +266,31 @@ function ServiceCard({ service, healthHistory, onRestart, isRestarting, voiceMet
           </button>
         )}
       </div>
-      {voiceMetrics && service.name === 'Voice Server' && (
+      {voiceMetrics && service.name === 'Voice Services' && (
         <div className="service-card__voice-stats">
-          <span className="voice-inline-stat">
-            <Phone size={12} style={{ color: voiceMetrics.activeCalls > 0 ? 'var(--sky)' : 'var(--text-dim)' }} />
-            {voiceMetrics.activeCalls} active
-          </span>
-          <span className="voice-inline-stat">
-            {voiceMetrics.totalCalls} today
-          </span>
+          {voiceMetrics.metricsAvailable ? (
+            <>
+              <span className="voice-inline-stat">
+                <Phone size={28} style={{ color: voiceMetrics.activeCalls > 0 ? 'var(--sky)' : 'var(--text-dim)' }} />
+                {voiceMetrics.activeCalls > 0 ? `${voiceMetrics.activeCalls} active` : 'Idle'}
+              </span>
+              <span className="voice-inline-stat">
+                24h: {voiceMetrics.callsLast24h ?? 0}
+              </span>
+              <span className="voice-inline-stat">
+                7d: {voiceMetrics.callsLast7d ?? 0}
+              </span>
+              <span className="voice-inline-stat" style={{ color: 'var(--text-dim)' }}>
+                Last: {voiceMetrics.lastCall 
+                  ? formatDistanceToNow(new Date(voiceMetrics.lastCall.timestamp), { addSuffix: true })
+                  : 'Never'}
+              </span>
+            </>
+          ) : (
+            <span className="voice-inline-stat" style={{ color: 'var(--text-dim)' }}>
+              ✗ No metrics endpoint
+            </span>
+          )}
         </div>
       )}
       {healthHistory && <ServiceUptimeBar history={healthHistory} />}
@@ -264,27 +303,48 @@ function VoiceServerCard({ metrics }: { metrics: VoiceServerMetrics }) {
     <div className="voice-server-card">
       <div className="voice-server-card__header">
         <Phone size={20} style={{ color: metrics.status === 'online' ? 'var(--emerald)' : 'var(--red)' }} />
-        <span>Voice Server</span>
+        <span>Voice Services</span>
         <StatusBadge status={metrics.status} />
       </div>
       
       <div className="voice-server-card__stats">
-        <div className="voice-stat">
-          <div className="voice-stat__value" style={{ color: metrics.activeCalls > 0 ? 'var(--sky)' : 'var(--text-muted)' }}>
-            {metrics.activeCalls}
-          </div>
-          <div className="voice-stat__label">Active Calls</div>
-        </div>
-        <div className="voice-stat">
-          <div className="voice-stat__value">{metrics.totalCalls}</div>
-          <div className="voice-stat__label">Total Today</div>
-        </div>
-        {metrics.uptime && (
-          <div className="voice-stat">
-            <div className="voice-stat__value">
-              {Math.floor(metrics.uptime / 3600)}h
+        {metrics.metricsAvailable ? (
+          <>
+            <div className="voice-stat">
+              <div className="voice-stat__value" style={{ color: metrics.activeCalls > 0 ? 'var(--sky)' : 'var(--text-muted)' }}>
+                {metrics.activeCalls}
+              </div>
+              <div className="voice-stat__label">Active Calls</div>
             </div>
-            <div className="voice-stat__label">Uptime</div>
+            <div className="voice-stat">
+              <div className="voice-stat__value">{metrics.callsLast24h ?? 0}</div>
+              <div className="voice-stat__label">Last 24h</div>
+            </div>
+            <div className="voice-stat">
+              <div className="voice-stat__value">{metrics.callsLast7d ?? 0}</div>
+              <div className="voice-stat__label">Last 7d</div>
+            </div>
+            <div className="voice-stat">
+              <div className="voice-stat__value" style={{ fontSize: '14px' }}>
+                {metrics.lastCall 
+                  ? formatDistanceToNow(new Date(metrics.lastCall.timestamp), { addSuffix: true })
+                  : 'Never'}
+              </div>
+              <div className="voice-stat__label">Last Call</div>
+            </div>
+            {metrics.uptime != null && (
+              <div className="voice-stat">
+                <div className="voice-stat__value">
+                  {Math.floor(metrics.uptime / 3600)}h {Math.floor((metrics.uptime % 3600) / 60)}m
+                </div>
+                <div className="voice-stat__label">Uptime</div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="voice-stat">
+            <div className="voice-stat__value" style={{ color: 'var(--text-dim)', fontSize: '14px' }}>✗</div>
+            <div className="voice-stat__label">No metrics endpoint</div>
           </div>
         )}
       </div>
@@ -510,16 +570,26 @@ function HeartbeatHealthCard({ data }: { data: HeartbeatHealthInfo }) {
         <StatusBadge status={data.status} />
       </div>
       
-      {/* Note about trigger method */}
+      {/* Note about which agent runs heartbeats */}
       <div style={{ 
-        fontSize: '11px', 
-        color: 'var(--text-dim)', 
-        padding: '4px 8px',
-        background: 'rgba(100,116,139,0.08)',
+        fontSize: '10px', 
+        color: 'var(--sky)', 
+        padding: '2px 6px',
+        background: 'rgba(56,189,248,0.1)',
         borderRadius: '4px',
-        marginBottom: '8px'
+        marginBottom: '4px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px'
       }}>
-        ⚡ Triggered via macOS launchd (every 30m)
+        <Terminal size={10} />
+        <span>
+          {data.agentName ? (
+            <>Operated by <strong>{data.agentName}</strong> (ops agent)</>
+          ) : (
+            '⚡ launchd triggered (30m)'
+          )}
+        </span>
       </div>
       
       <div className="heartbeat-info">
@@ -625,45 +695,32 @@ function MemorySystemCard({ data }: { data: MemorySystemInfo }) {
         <h2>Memory Flow</h2>
       </div>
       
-      <div className="memory-flow-diagram">
-        {/* Level 1: MEMORY.md (curated) */}
+      <div className="memory-flow-grid">
         <MemoryFlowLevel
-          icon={<FileText size={18} style={{ color: 'var(--sky)' }} />}
+          icon={<FileText size={16} style={{ color: 'var(--sky)' }} />}
           name="MEMORY.md"
           label="curated long-term"
           size={data.memoryMd?.size || 0}
           lastModified={data.memoryMd?.lastModified || null}
         />
-        
-        <div className="memory-flow-arrow">↓</div>
-        
-        {/* Level 2: memory/*.md (daily) */}
         <MemoryFlowLevel
-          icon={<FolderOpen size={18} style={{ color: 'var(--emerald)' }} />}
+          icon={<FolderOpen size={16} style={{ color: 'var(--emerald)' }} />}
           name="memory/*.md"
           label="daily notes"
           size={data.memoryFolder.totalSize}
           count={data.memoryFolder.fileCount}
           lastModified={data.memoryFolder.lastModified}
         />
-        
-        <div className="memory-flow-arrow">↓</div>
-        
-        {/* Level 3: telegram/*.md (chat dumps) */}
         <MemoryFlowLevel
-          icon={<MessageSquare size={18} style={{ color: 'var(--sky)' }} />}
+          icon={<MessageSquare size={16} style={{ color: 'var(--sky)' }} />}
           name="telegram/*.md"
           label="chat dumps"
           size={data.telegramDumps.totalSize}
           count={data.telegramDumps.fileCount}
           lastModified={data.telegramDumps.lastModified}
         />
-        
-        <div className="memory-flow-arrow">↓</div>
-        
-        {/* Level 4: voice-calls/*.txt (transcripts) */}
         <MemoryFlowLevel
-          icon={<Mic size={18} style={{ color: 'var(--amber)' }} />}
+          icon={<Mic size={16} style={{ color: 'var(--amber)' }} />}
           name="voice-calls/*.txt"
           label="transcripts"
           size={data.voiceCalls.totalSize}
@@ -679,13 +736,89 @@ function MemorySystemCard({ data }: { data: MemorySystemInfo }) {
    NEW: Context Usage Section
    ═══════════════════════════════════════════════════════ */
 
-function ContextUsageCard({ data }: { data: ContextUsageInfo }) {
-  const barColor = data.percentUsed > 80 
-    ? 'var(--red)' 
-    : data.percentUsed > 50 
-      ? 'var(--amber)' 
-      : 'var(--emerald)';
+function getBarColor(percent: number): string {
+  if (percent >= 80) return 'var(--red)';
+  if (percent >= 50) return 'var(--amber)';
+  return 'var(--emerald)';
+}
+
+function getPercentColorStyle(percent: number): React.CSSProperties {
+  return { color: getBarColor(percent) };
+}
+
+function AgentContextSection({ agent }: { agent: AgentContextInfo }) {
+  const barColor = getBarColor(agent.percentUsed);
+  const tokensK = Math.round(agent.currentTokens / 1000);
+  const maxK = Math.round(agent.maxTokens / 1000);
+  const lastComp = agent.lastCompaction 
+    ? formatDistanceToNow(new Date(agent.lastCompaction), { addSuffix: true }).replace(' ago', '').replace('about ', '~')
+    : null;
+  
+  return (
+    <div className="context-agent-section context-agent-section--compact">
+      <div className="context-agent-header">
+        <span className="context-agent-name">{agent.agentName}</span>
+        <span className="context-compact-tokens">{tokensK}k/{maxK}k</span>
+        <span style={{ color: barColor, fontWeight: 600, fontSize: '0.75rem' }}>{agent.percentUsed.toFixed(0)}%</span>
+      </div>
       
+      <div className="context-usage-bar-container context-usage-bar-container--compact">
+        <div className="context-usage-bar-bg" style={{ height: '4px' }}>
+          <div 
+            className="context-usage-bar-fill"
+            style={{ 
+              width: `${Math.min(agent.percentUsed, 100)}%`,
+              backgroundColor: barColor 
+            }}
+          />
+        </div>
+      </div>
+      
+      <div className="context-compact-meta">
+        <span>Compactions: {agent.compactionsToday}</span>
+        {lastComp && <span> · Last: {lastComp}</span>}
+      </div>
+    </div>
+  );
+}
+
+function CompactionHistoryTable({ history }: { history: { timestamp: string; tokensBefore: number; percentBefore: number; agent: string }[] }) {
+  if (history.length === 0) return null;
+  
+  return (
+    <table className="context-compaction-table context-compaction-table--compact" style={{ fontSize: '11px', margin: '2px 0 0 0' }}>
+      <thead>
+        <tr>
+          <th style={{ padding: '2px 4px' }}>Time</th>
+          <th style={{ padding: '2px 4px' }}>Tokens</th>
+          <th style={{ padding: '2px 4px' }}>%</th>
+        </tr>
+      </thead>
+      <tbody>
+        {history.map((c, i) => (
+          <tr key={i} style={{ lineHeight: '1.2' }}>
+            <td style={{ padding: '1px 4px' }}>{format(new Date(c.timestamp), 'h:mm a')}</td>
+            <td style={{ padding: '1px 4px' }}>{c.tokensBefore.toLocaleString()}</td>
+            <td style={{ padding: '1px 4px', ...getPercentColorStyle(c.percentBefore) }}>{c.percentBefore.toFixed(0)}%</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ContextUsageCard({ data }: { data: ContextUsageInfo }) {
+  const [showHistory, setShowHistory] = useState(false);
+  // Find Henry (main) and Oscar (ops) agents — Henry first
+  const henry = data.agents.find(a => a.agentId === 'main' || a.agentName.toLowerCase() === 'henry');
+  const oscar = data.agents.find(a => a.agentId === 'ops' || a.agentName.toLowerCase() === 'oscar');
+  // Fallback: if we can't identify them, just use order
+  const orderedAgents = henry && oscar ? [henry, oscar] : data.agents;
+  
+  const henryHistory = (henry || orderedAgents[0])?.compactionHistory?.map(c => ({ 
+    ...c, agent: (henry || orderedAgents[0]).agentName 
+  })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) || [];
+
   return (
     <div className="system-status__card system-status__card--context">
       <div className="system-status__card-header">
@@ -694,57 +827,96 @@ function ContextUsageCard({ data }: { data: ContextUsageInfo }) {
       </div>
       
       <div className="context-usage-info">
-        <div className="context-usage-bar-container">
-          <div className="context-usage-bar-bg">
-            <div 
-              className="context-usage-bar-fill"
-              style={{ 
-                width: `${Math.min(data.percentUsed, 100)}%`,
-                backgroundColor: barColor 
-              }}
-            />
-          </div>
-          <div className="context-usage-bar-label">
-            <span>{data.currentTokens.toLocaleString()} / {data.maxTokens.toLocaleString()} tokens</span>
-            <span style={{ color: barColor }}>{data.percentUsed.toFixed(1)}%</span>
-          </div>
+        {/* Henry section */}
+        <AgentContextSection agent={henry || orderedAgents[0]} />
+        
+        {/* Henry compaction history — always visible */}
+        {henryHistory.length > 0 && <CompactionHistoryTable history={henryHistory} />}
+        
+        {/* Divider */}
+        <div className="context-agent-divider" style={{ margin: '4px 0' }} />
+        
+        {/* Oscar section */}
+        {(oscar || orderedAgents[1]) && (
+          <AgentContextSection agent={oscar || orderedAgents[1]} />
+        )}
+        
+        {/* memoryFlush + collapsible history */}
+        <div className="context-compact-footer">
+          <span className="context-compact-flush">
+            memoryFlush: {data.memoryFlush?.enabled ? (
+              <span style={{ color: 'var(--emerald)' }}>✓ On</span>
+            ) : (
+              <span style={{ color: 'var(--red)' }}>✗ Off</span>
+            )}
+          </span>
         </div>
         
-        <div className="context-usage-stats">
-          <div className="context-usage-stat">
-            <span className="context-usage-stat-label">Compactions today:</span>
-            <span className="context-usage-stat-value">{data.compactionsToday}</span>
-          </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   NEW: Agents Overview Section
+   Shows Henry (coordinator) + Oscar (ops)
+   ═══════════════════════════════════════════════════════ */
+
+function AgentsCard({ agents }: { agents: AgentInfo[] }) {
+  if (agents.length === 0) return null;
+  
+  return (
+    <div className="system-status__card system-status__card--agents">
+      <div className="system-status__card-header">
+        <User size={18} style={{ color: 'var(--purple, #8B5CF6)' }} />
+        <h2>Active Agents</h2>
+        <span className="system-status__card-count">{agents.length} agents</span>
+      </div>
+      
+      <div className="agents-list">
+        {agents.map(agent => {
+          const modelShort = agent.model.split('/').pop() || agent.model;
+          const isHeartbeatAgent = agent.heartbeatEnabled;
           
-          {data.lastCompaction && (
-            <div className="context-usage-stat">
-              <span className="context-usage-stat-label">Last compaction:</span>
-              <span className="context-usage-stat-value">
-                {formatDistanceToNow(new Date(data.lastCompaction), { addSuffix: true })}
-              </span>
-            </div>
-          )}
-          
-          <div className="context-usage-stat">
-            <span className="context-usage-stat-label">memoryFlush:</span>
-            <span className="context-usage-stat-value">
-              {data.memoryFlush?.enabled ? (
-                <span className="memory-flush-enabled">
-                  <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
-                  Enabled
-                  {data.memoryFlush.prompt && (
-                    <span className="memory-flush-configured">(prompt configured)</span>
+          return (
+            <div key={agent.id} className="agent-card">
+              <div className="agent-card__icon">
+                {agent.id === 'main' ? (
+                  <span style={{ fontSize: '18px' }}>🤖</span>
+                ) : (
+                  <span style={{ fontSize: '18px' }}>⚙️</span>
+                )}
+              </div>
+              <div className="agent-card__info">
+                <div className="agent-card__name">
+                  {agent.name}
+                  {agent.id === 'main' && (
+                    <span className="agent-card__role" style={{ color: 'var(--amber)' }}>coordinator</span>
                   )}
-                </span>
-              ) : (
-                <span className="memory-flush-disabled">
-                  <XCircle size={12} style={{ color: 'var(--red)' }} />
-                  Disabled
-                </span>
-              )}
-            </span>
-          </div>
-        </div>
+                  {agent.id === 'ops' && (
+                    <span className="agent-card__role" style={{ color: 'var(--sky)' }}>ops</span>
+                  )}
+                </div>
+                <div className="agent-card__model">
+                  <Cpu size={12} style={{ color: 'var(--text-dim)' }} />
+                  <span>{modelShort}</span>
+                </div>
+                {isHeartbeatAgent && (
+                  <div className="agent-card__heartbeat">
+                    <Heart size={12} style={{ color: 'var(--emerald)' }} />
+                    <span>Heartbeat every {agent.heartbeatInterval}</span>
+                  </div>
+                )}
+                {!isHeartbeatAgent && agent.id === 'main' && (
+                  <div className="agent-card__heartbeat" style={{ color: 'var(--text-dim)' }}>
+                    <Heart size={12} />
+                    <span>Heartbeat disabled</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -771,6 +943,7 @@ export default function SystemStatusTab() {
   const [heartbeatHealth, setHeartbeatHealth] = useState<HeartbeatHealthInfo | null>(null);
   const [memorySystem, setMemorySystem] = useState<MemorySystemInfo | null>(null);
   const [contextUsage, setContextUsage] = useState<ContextUsageInfo | null>(null);
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
   
   // Action states
   const [serviceHealth, setServiceHealth] = useState<ServiceHealthHistory>({});
@@ -788,7 +961,7 @@ export default function SystemStatusTab() {
         details: 'Port 18789'
       },
       {
-        name: 'Voice Server',
+        name: 'Voice Services',
         status: 'unknown',
         lastCheck: new Date(),
         details: 'Port 6060'
@@ -861,6 +1034,7 @@ export default function SystemStatusTab() {
         if (data.heartbeat) setHeartbeatHealth(data.heartbeat);
         if (data.memory) setMemorySystem(data.memory);
         if (data.context) setContextUsage(data.context);
+        if (data.agents) setAgents(data.agents);
         
         // Update cron jobs from real data
         if (data.cronJobs && data.cronJobs.length > 0) {
@@ -1052,6 +1226,9 @@ export default function SystemStatusTab() {
       </div>
 
       <div className="system-status__grid">
+        {/* Agents Overview */}
+        {agents.length > 0 && <AgentsCard agents={agents} />}
+
         {/* Services */}
         <div className="system-status__card system-status__card--services">
           <div className="system-status__card-header">
@@ -1062,7 +1239,7 @@ export default function SystemStatusTab() {
             {services.map(service => {
               const healthKeyMap: Record<string, string> = {
                 'Clawdbot Gateway': 'gateway',
-                'Voice Server': 'voice',
+                'Voice Services': 'voice',
                 'MC File Server': 'file-server',
                 'Automation Browser': 'browser',
               };
@@ -1074,40 +1251,21 @@ export default function SystemStatusTab() {
                   healthHistory={healthKey ? serviceHealth[healthKey] : undefined}
                   onRestart={handleRestartService}
                   isRestarting={restartingService === healthKeyMap[service.name]}
-                  voiceMetrics={service.name === 'Voice Server' ? voiceMetrics : undefined}
+                  voiceMetrics={service.name === 'Voice Services' ? voiceMetrics : undefined}
                 />
               );
             })}
           </div>
         </div>
 
-        {/* Telegram Dumps */}
-        {telegramDumps && (
-          <div>
-            <TelegramDumpsCard data={telegramDumps} onTriggerDump={handleTelegramDump} isDumping={isDumping} />
-            {dumpResult && (
-              <div style={{ 
-                padding: '6px 12px', 
-                marginTop: '4px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                background: dumpResult.startsWith('✅') ? 'var(--emerald-dim)' : 'var(--red-dim)',
-                color: dumpResult.startsWith('✅') ? 'var(--emerald)' : 'var(--red)',
-              }}>
-                {dumpResult}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Heartbeat Health */}
         {heartbeatHealth && <HeartbeatHealthCard data={heartbeatHealth} />}
 
-        {/* Memory System (Flow Diagram) */}
-        {memorySystem && <MemorySystemCard data={memorySystem} />}
-
         {/* Context Usage (Compaction Countdown) */}
         {contextUsage && <ContextUsageCard data={contextUsage} />}
+
+        {/* Memory System (Flow Diagram) */}
+        {memorySystem && <MemorySystemCard data={memorySystem} />}
 
         {/* Cron Jobs */}
         <div className="system-status__card system-status__card--cron">
@@ -1129,7 +1287,26 @@ export default function SystemStatusTab() {
           </div>
         </div>
 
-        {/* Sub-Agent Timeline - Full Width */}
+        {/* Telegram Dumps */}
+        {telegramDumps && (
+          <div style={{ gridColumn: 'span 4' }}>
+            <TelegramDumpsCard data={telegramDumps} onTriggerDump={handleTelegramDump} isDumping={isDumping} />
+            {dumpResult && (
+              <div style={{ 
+                padding: '6px 12px', 
+                marginTop: '4px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                background: dumpResult.startsWith('✅') ? 'var(--emerald-dim)' : 'var(--red-dim)',
+                color: dumpResult.startsWith('✅') ? 'var(--emerald)' : 'var(--red)',
+              }}>
+                {dumpResult}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Sub-Agent Timeline */}
         <div className="system-status__card system-status__card--timeline">
           <div className="system-status__card-header">
             <Terminal size={18} style={{ color: 'var(--emerald)' }} />
@@ -1170,7 +1347,7 @@ export default function SystemStatusTab() {
             </div>
             <div className="agent-timeline-summary__item">
               <Zap size={14} />
-              <span>Peak Concurrency: 2</span>
+              <span>Peak Concurrency: ✗</span>
             </div>
           </div>
         </div>

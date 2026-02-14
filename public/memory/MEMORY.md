@@ -310,3 +310,9 @@
 When performing research for Paul, always include a concrete plan or recommendation as part of the result. Research is not complete until a practical next step or strategy is presented.
 
 When updating task notes in Toodledo, never overwrite the existing notes. Always append new notes above the old ones, so the history is preserved.
+
+## API Key Lesson (2026-02-10)
+- **Use Anthropic directly** for side projects (nutrition dashboard, etc.) — we have oodles of overhead
+- **OpenRouter has NO credits** — don't use it for anything
+- The original nutrition-dashboard/server.js used Anthropic directly — I wrongly switched to OpenRouter when building the Vercel version
+- ALWAYS check existing code before reimplementing

@@ -19,7 +19,11 @@ interface VoiceServerMetrics {
   status: 'online' | 'offline' | 'unknown';
   activeCalls: number;
   totalCalls: number;
+  metricsAvailable: boolean;
   uptime?: number;
+  lastCall?: { timestamp: string; duration: number; caller: string } | null;
+  callsLast24h?: number;
+  callsLast7d?: number;
   lastError?: string;
   lastErrorTime?: string;
 }
@@ -65,7 +69,7 @@ async function getGatewayStatus(): Promise<ServiceStatus> {
 // Get voice server status
 async function getVoiceServerStatus(): Promise<{ service: ServiceStatus; metrics: VoiceServerMetrics }> {
   const service: ServiceStatus = {
-    name: 'Voice Server',
+    name: 'Voice Services',
     status: 'unknown',
     lastCheck: new Date().toISOString(),
     details: 'Port 6060'
@@ -74,10 +78,36 @@ async function getVoiceServerStatus(): Promise<{ service: ServiceStatus; metrics
   const metrics: VoiceServerMetrics = {
     status: 'unknown',
     activeCalls: 0,
-    totalCalls: 0
+    totalCalls: 0,
+    metricsAvailable: false  // No metrics endpoint exists
   };
   
   try {
+    // Try /status endpoint first for rich metrics
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    try {
+      const res = await fetch('http://127.0.0.1:6060/status', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        service.status = 'online';
+        service.details = 'Port 6060 — Ready';
+        metrics.status = 'online';
+        metrics.metricsAvailable = true;
+        metrics.activeCalls = data.activeCalls || 0;
+        metrics.totalCalls = data.totalCalls || 0;
+        metrics.uptime = data.uptime;
+        metrics.lastCall = data.lastCall || null;
+        metrics.callsLast24h = data.callsLast24h ?? 0;
+        metrics.callsLast7d = data.callsLast7d ?? 0;
+        return { service, metrics };
+      }
+    } catch {
+      clearTimeout(timeoutId);
+    }
+
+    // Fallback: just check if server is up
     const isOnline = await checkService('http://127.0.0.1:6060/');
     if (isOnline) {
       service.status = 'online';
@@ -170,6 +200,15 @@ interface HeartbeatConfig {
   target: string;
 }
 
+interface AgentInfo {
+  id: string;
+  name: string;
+  model: string;
+  heartbeatEnabled: boolean;
+  heartbeatInterval?: string;
+  workspace: string;
+}
+
 interface MemoryFlushConfig {
   enabled: boolean;
   prompt: string;
@@ -211,12 +250,20 @@ interface HeartbeatHealthInfo {
   history24h: { time: string; ok: boolean }[];
 }
 
-interface ContextUsageInfo {
+interface AgentContextInfo {
+  agentId: string;
+  agentName: string;
+  model: string;
   currentTokens: number;
   maxTokens: number;
   percentUsed: number;
   compactionsToday: number;
   lastCompaction: string | null;
+  compactionHistory: { timestamp: string; tokensBefore: number; percentBefore: number }[];
+}
+
+interface ContextUsageInfo {
+  agents: AgentContextInfo[];
   memoryFlush: MemoryFlushConfig | null;
 }
 
@@ -382,8 +429,93 @@ function getMemorySystemInfo(): MemorySystemInfo {
 const GATEWAY_LOG = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'gateway.log');
 const HEARTBEAT_STATE = path.join(process.env.HOME || '', '.clawdbot', 'logs', 'heartbeat-monitor-state.json');
 
-function getHeartbeatHealth(): HeartbeatHealthInfo {
-  const result: HeartbeatHealthInfo = {
+// Get info about all configured agents
+function getAgentInfo(): AgentInfo[] {
+  const agents: AgentInfo[] = [];
+  
+  try {
+    if (!fs.existsSync(CLAWDBOT_CONFIG)) return agents;
+    
+    const config = JSON.parse(fs.readFileSync(CLAWDBOT_CONFIG, 'utf8'));
+    const defaults = config?.agents?.defaults || {};
+    const agentList = config?.agents?.list || [];
+    
+    for (const agent of agentList) {
+      // Get model - agent-specific or default
+      const agentModel = agent.model?.primary || defaults.model?.primary || 'unknown';
+      
+      // Get heartbeat config - agent-specific or default
+      const heartbeat = agent.heartbeat || defaults.heartbeat || {};
+      const heartbeatEvery = heartbeat.every || '0m';
+      const heartbeatEnabled = heartbeatEvery !== '0m' && heartbeatEvery !== '0';
+      
+      agents.push({
+        id: agent.id || 'unknown',
+        name: agent.name || agent.id || 'Unknown',
+        model: agentModel,
+        heartbeatEnabled,
+        heartbeatInterval: heartbeatEnabled ? heartbeatEvery : undefined,
+        workspace: agent.workspace || defaults.workspace || ''
+      });
+    }
+  } catch (e) {
+    console.error('getAgentInfo error:', e);
+  }
+  
+  return agents;
+}
+
+// Find the agent that actually runs heartbeats (Oscar)
+function getHeartbeatAgentConfig(): { config: HeartbeatConfig | null; agentName: string; agentModel: string } {
+  try {
+    if (!fs.existsSync(CLAWDBOT_CONFIG)) return { config: null, agentName: '', agentModel: '' };
+    
+    const configData = JSON.parse(fs.readFileSync(CLAWDBOT_CONFIG, 'utf8'));
+    const defaults = configData?.agents?.defaults || {};
+    const agentList = configData?.agents?.list || [];
+    
+    // Find the agent with heartbeat enabled (not "0m")
+    for (const agent of agentList) {
+      const heartbeat = agent.heartbeat || {};
+      const every = heartbeat.every;
+      
+      // Skip if no heartbeat config or disabled
+      if (!every || every === '0m' || every === '0') continue;
+      
+      // Found an agent with heartbeat enabled
+      const agentModel = agent.model?.primary || defaults.model?.primary || 'unknown';
+      const hbModel = heartbeat.model || defaults.heartbeat?.model || agentModel;
+      
+      return {
+        config: {
+          every: heartbeat.every,
+          activeHours: heartbeat.activeHours || defaults.heartbeat?.activeHours || { start: '00:00', end: '23:59' },
+          model: hbModel,
+          target: heartbeat.target || defaults.heartbeat?.target || 'last'
+        },
+        agentName: agent.name || agent.id,
+        agentModel: agentModel
+      };
+    }
+    
+    // Fallback: use defaults if no agent-specific heartbeat found
+    const defaultHb = defaults.heartbeat;
+    if (defaultHb && defaultHb.every && defaultHb.every !== '0m') {
+      return {
+        config: defaultHb,
+        agentName: 'Default',
+        agentModel: defaults.model?.primary || 'unknown'
+      };
+    }
+  } catch (e) {
+    console.error('getHeartbeatAgentConfig error:', e);
+  }
+  
+  return { config: null, agentName: '', agentModel: '' };
+}
+
+function getHeartbeatHealth(): HeartbeatHealthInfo & { agentName?: string; agentModel?: string } {
+  const result: HeartbeatHealthInfo & { agentName?: string; agentModel?: string } = {
     config: null,
     lastHeartbeat: null,
     status: 'unknown',
@@ -391,15 +523,17 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
   };
   
   try {
-    // Read config
-    const intervalMinutes = 30;
-    if (fs.existsSync(CLAWDBOT_CONFIG)) {
-      const config = JSON.parse(fs.readFileSync(CLAWDBOT_CONFIG, 'utf8'));
-      const hbConfig = config?.agents?.defaults?.heartbeat;
-      if (hbConfig) {
-        result.config = hbConfig;
-      }
+    // Read config from the agent that actually runs heartbeats (Oscar)
+    const { config: hbConfig, agentName, agentModel } = getHeartbeatAgentConfig();
+    
+    if (hbConfig) {
+      result.config = hbConfig;
+      result.agentName = agentName;
+      result.agentModel = agentModel;
     }
+    
+    // Parse interval from config (e.g., "30m" -> 30)
+    const intervalMinutes = hbConfig?.every ? parseInt(hbConfig.every) || 30 : 30;
     
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -428,23 +562,19 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
     }
     
     // Generate exactly 48 slots (24h ÷ 30min = 48). Always 48. No exceptions.
-    const toleranceMs = 10 * 60 * 1000; // 10 minute tolerance
+    const slotMs = intervalMinutes * 60 * 1000;
     
     for (let i = 0; i < 48; i++) {
-      const slotTime = new Date(now.getTime() - i * intervalMinutes * 60 * 1000);
+      // Each slot covers a full interval window: [slotEnd, slotStart)
+      const slotEnd = new Date(now.getTime() - i * slotMs);
+      const slotStart = new Date(slotEnd.getTime() - slotMs);
       const fired = actualHeartbeats.find(hb => 
-        Math.abs(hb.getTime() - slotTime.getTime()) < toleranceMs
+        hb.getTime() > slotStart.getTime() && hb.getTime() <= slotEnd.getTime()
       );
       result.history24h.push({ 
-        time: slotTime.toISOString(), 
+        time: slotEnd.toISOString(), 
         ok: !!fired 
       });
-    }
-    
-    // Determine health status
-    if (actualHeartbeats.length > 0) {
-      const minutesAgo = (now.getTime() - actualHeartbeats[0].getTime()) / 60000;
-      result.status = minutesAgo > 45 ? 'stale' : 'healthy';
     }
     
     // FALLBACK: Check heartbeat monitor state file
@@ -457,7 +587,7 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
       } catch {}
     }
     
-    // Determine health status based on lastHeartbeat
+    // Determine health status based on lastHeartbeat (single calculation)
     if (result.lastHeartbeat) {
       const lastTime = new Date(result.lastHeartbeat);
       const minutesAgo = (now.getTime() - lastTime.getTime()) / 60000;
@@ -479,13 +609,147 @@ function getHeartbeatHealth(): HeartbeatHealthInfo {
   return result;
 }
 
+// Default context limits per model family
+const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  'claude-opus-4-6': 200000,
+  'claude-opus-4-5': 200000,
+  'gemini-2.5-flash': 1048576,
+};
+
+function getContextLimitForModel(model: string): number {
+  return MODEL_CONTEXT_LIMITS[model] || 200000;
+}
+
+// Scan a JSONL tail for the last usage.totalTokens and model (fallback for agents without those in sessions.json)
+function getLastUsageFromJsonl(jsonlPath: string): { totalTokens: number; model: string | null } {
+  if (!fs.existsSync(jsonlPath)) return { totalTokens: 0, model: null };
+  // Read from end — scan last 50KB for efficiency
+  const stats = fs.statSync(jsonlPath);
+  const readSize = Math.min(stats.size, 50 * 1024);
+  const fd = fs.openSync(jsonlPath, 'r');
+  const buf = Buffer.alloc(readSize);
+  fs.readSync(fd, buf, 0, readSize, stats.size - readSize);
+  fs.closeSync(fd);
+  const tail = buf.toString('utf8');
+  const lines = tail.split('\n').reverse();
+  for (const line of lines) {
+    if (!line || !line.includes('"totalTokens"')) continue;
+    try {
+      const entry = JSON.parse(line);
+      if (entry?.message?.usage?.totalTokens) {
+        return {
+          totalTokens: entry.message.usage.totalTokens,
+          model: entry.message?.model || null
+        };
+      }
+    } catch {
+      // partial line from slicing — skip
+    }
+  }
+  return { totalTokens: 0, model: null };
+}
+
+// Read compaction history from a JSONL file
+function readCompactionHistory(jsonlPath: string, contextTokens: number): {
+  compactions: { timestamp: string; tokensBefore: number; percentBefore: number }[];
+  compactionsToday: number;
+  lastCompaction: string | null;
+} {
+  const compactions: { timestamp: string; tokensBefore: number; percentBefore: number }[] = [];
+  
+  if (!fs.existsSync(jsonlPath)) {
+    return { compactions, compactionsToday: 0, lastCompaction: null };
+  }
+  
+  const content = fs.readFileSync(jsonlPath, 'utf8');
+  const lines = content.split('\n');
+  for (const line of lines) {
+    if (!line || !line.includes('"compaction"')) continue;
+    try {
+      const entry = JSON.parse(line);
+      if (entry.type === 'compaction' && entry.timestamp && entry.tokensBefore !== undefined) {
+        compactions.push({
+          timestamp: entry.timestamp,
+          tokensBefore: entry.tokensBefore,
+          percentBefore: contextTokens > 0 ? (entry.tokensBefore / contextTokens) * 100 : 0
+        });
+      }
+    } catch {
+      // Skip malformed lines
+    }
+  }
+  
+  // Sort most recent first
+  compactions.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  
+  const lastCompaction = compactions.length > 0 ? compactions[0].timestamp : null;
+  
+  // Count compactions today (PST / America/Los_Angeles)
+  const nowPST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const todayStr = `${nowPST.getFullYear()}-${String(nowPST.getMonth() + 1).padStart(2, '0')}-${String(nowPST.getDate()).padStart(2, '0')}`;
+  
+  const compactionsToday = compactions.filter(c => {
+    const cDate = new Date(new Date(c.timestamp).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const cStr = `${cDate.getFullYear()}-${String(cDate.getMonth() + 1).padStart(2, '0')}-${String(cDate.getDate()).padStart(2, '0')}`;
+    return cStr === todayStr;
+  }).length;
+  
+  return { compactions, compactionsToday, lastCompaction };
+}
+
+// Read context info for a single agent
+function getAgentContext(agentDir: string, sessionKey: string, agentId: string, agentName: string): AgentContextInfo | null {
+  const sessionsPath = path.join(agentDir, 'sessions', 'sessions.json');
+  if (!fs.existsSync(sessionsPath)) return null;
+  
+  try {
+    const sessions = JSON.parse(fs.readFileSync(sessionsPath, 'utf8'));
+    const session = sessions[sessionKey];
+    if (!session) return null;
+    
+    const sessionId = session.sessionId;
+    const jsonlPath = sessionId ? path.join(agentDir, 'sessions', `${sessionId}.jsonl`) : '';
+    
+    // Get model + current tokens — prefer sessions.json, fall back to JSONL scan
+    let model = session.model || '';
+    let currentTokens = session.totalTokens || 0;
+    
+    if ((!currentTokens || !model) && jsonlPath) {
+      const jsonlData = getLastUsageFromJsonl(jsonlPath);
+      if (!currentTokens) currentTokens = jsonlData.totalTokens;
+      if (!model) model = jsonlData.model || 'unknown';
+    }
+    if (!model) model = 'unknown';
+    
+    const contextTokens = session.contextTokens || getContextLimitForModel(model);
+    const percentUsed = contextTokens > 0 ? (currentTokens / contextTokens) * 100 : 0;
+    
+    // Read compaction history
+    let compactionData = { compactions: [] as { timestamp: string; tokensBefore: number; percentBefore: number }[], compactionsToday: 0, lastCompaction: null as string | null };
+    if (jsonlPath) {
+      compactionData = readCompactionHistory(jsonlPath, contextTokens);
+    }
+    
+    return {
+      agentId,
+      agentName,
+      model,
+      currentTokens,
+      maxTokens: contextTokens,
+      percentUsed,
+      compactionsToday: compactionData.compactionsToday,
+      lastCompaction: compactionData.lastCompaction,
+      compactionHistory: compactionData.compactions
+    };
+  } catch (e) {
+    console.error(`getAgentContext error for ${agentId}:`, e);
+    return null;
+  }
+}
+
 function getContextUsage(): ContextUsageInfo {
   const result: ContextUsageInfo = {
-    currentTokens: 45000, // Placeholder - would come from gateway
-    maxTokens: 200000,
-    percentUsed: 22.5,
-    compactionsToday: 1,
-    lastCompaction: null,
+    agents: [],
     memoryFlush: null
   };
   
@@ -499,9 +763,25 @@ function getContextUsage(): ContextUsageInfo {
       }
     }
     
-    // In production, these would come from gateway session state
-    // For now, return reasonable placeholders
-    result.lastCompaction = new Date(Date.now() - 2 * 3600000).toISOString();
+    const agentsBase = path.join(process.env.HOME || '', '.clawdbot', 'agents');
+    
+    // Henry (main agent)
+    const henry = getAgentContext(
+      path.join(agentsBase, 'main'),
+      'agent:main:main',
+      'main',
+      'Henry'
+    );
+    if (henry) result.agents.push(henry);
+    
+    // Oscar (ops agent)
+    const oscar = getAgentContext(
+      path.join(agentsBase, 'ops'),
+      'agent:ops:main',
+      'ops',
+      'Oscar'
+    );
+    if (oscar) result.agents.push(oscar);
   } catch (e) {
     console.error('getContextUsage error:', e);
   }
@@ -607,6 +887,7 @@ export async function GET(request: NextRequest) {
       context: getContextUsage(),
       cronJobs,
       subAgents,
+      agents: getAgentInfo(),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
