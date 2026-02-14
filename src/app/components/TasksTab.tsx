@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ComposedChart, BarChart, AreaChart, PieChart,
   Bar, Area, Line, Pie, Cell,
@@ -8,20 +8,33 @@ import {
 } from 'recharts';
 import {
   Zap, CheckCircle2, TrendingUp, Clock, ListChecks,
-  BarChart3, FolderOpen, RefreshCw, AlertCircle, Calendar
+  BarChart3, FolderOpen, RefreshCw, AlertCircle, Calendar,
+  Target, Gauge, CalendarDays
 } from 'lucide-react';
-import { format, subDays, formatDistanceToNow, startOfYear, endOfYear, isWithinInterval, fromUnixTime } from 'date-fns';
+import { format, subDays, formatDistanceToNow } from 'date-fns';
 
 /* ═══════════════════════════════════════════════════════
-   Mission Control — Tasks Tab v1.5
+   Mission Control — Tasks Tab v2.0
    LIVE: Velocity, Recent Closes, Due Today
-   HISTORIC: Yearly trends, Folder breakdown, Productivity
+   HISTORIC: Yearly trends, 6 visualizations, 9 years
    ═══════════════════════════════════════════════════════ */
 
-// Use local API route - no external dependency needed
 const LIVE_API_URL = '';
 
 const COLORS = ['#10B981', '#38BDF8', '#FBBF24', '#F87171', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
+const PRIORITY_COLORS: Record<string, string> = {
+  '3': '#F87171', // High - red
+  '2': '#FBBF24', // Med - amber
+  '1': '#38BDF8', // Low - sky
+  '0': '#64748B', // None - slate
+};
+const PRIORITY_LABELS: Record<string, string> = {
+  '3': 'High',
+  '2': 'Medium',
+  '1': 'Low',
+  '0': 'None',
+};
+const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 interface Task {
   id: number;
@@ -34,6 +47,7 @@ interface Task {
   priority: number;
   duedate?: number;
   tag?: string;
+  repeat?: string;
 }
 
 interface TaskData {
@@ -43,6 +57,16 @@ interface TaskData {
   totalCompleted: number;
   generatedAt: string;
   folders?: { id: number; name: string }[];
+}
+
+interface HistoricData {
+  year: number;
+  totalCompleted: number;
+  monthlyBreakdown: { month: number; count: number; avgDaysToClose: number }[];
+  priorityBreakdown: Record<string, number>;
+  folderBreakdown: { name: string; count: number }[];
+  dayOfWeekBreakdown: number[];
+  yearlyTotals: { year: number; count: number; monthly: number[] }[];
 }
 
 // Sample data for demo
@@ -59,7 +83,6 @@ function generateSampleData(): TaskData {
     { id: 5, name: 'Inbox' },
   ];
   
-  // Generate 365 days of completed tasks for yearly view
   for (let i = 0; i < 500; i++) {
     const daysAgo = Math.floor(Math.random() * 365);
     const completedTs = now - daysAgo * 86400 - Math.floor(Math.random() * 43200);
@@ -77,7 +100,6 @@ function generateSampleData(): TaskData {
     });
   }
   
-  // Generate open tasks
   for (let i = 0; i < 45; i++) {
     const addedDaysAgo = Math.floor(Math.random() * 30);
     const addedTs = now - addedDaysAgo * 86400;
@@ -106,30 +128,14 @@ function generateSampleData(): TaskData {
 }
 
 const SAMPLE_TASK_TITLES = [
-  'Build Mission Control v1.5',
-  'Review sprint planning docs',
-  'Research VVO frameworks',
-  'Morning briefing automation',
-  'Update MEMORY.md',
-  'Toodledo API integration',
-  'Deploy to Vercel',
-  'Fix authentication flow',
-  'Create task velocity chart',
-  'Implement dark theme',
-  'Add bar charts to dashboard',
-  'Review Anthropic usage',
-  'Schedule weekly standup',
-  'Update TOOLS.md',
-  'Research Home Assistant',
-  'Configure RescueTime API',
-  'Build captures viewer',
-  'Test voice calling',
-  'Review calendar sync',
-  'Optimize API costs',
-  'Write documentation',
-  'Fix mobile layout',
-  'Add search functionality',
-  'Create memory browser',
+  'Build Mission Control v1.5', 'Review sprint planning docs', 'Research VVO frameworks',
+  'Morning briefing automation', 'Update MEMORY.md', 'Toodledo API integration',
+  'Deploy to Vercel', 'Fix authentication flow', 'Create task velocity chart',
+  'Implement dark theme', 'Add bar charts to dashboard', 'Review Anthropic usage',
+  'Schedule weekly standup', 'Update TOOLS.md', 'Research Home Assistant',
+  'Configure RescueTime API', 'Build captures viewer', 'Test voice calling',
+  'Review calendar sync', 'Optimize API costs', 'Write documentation',
+  'Fix mobile layout', 'Add search functionality', 'Create memory browser',
   'Design system status page',
 ];
 
@@ -142,7 +148,7 @@ function DarkTooltip({ active, payload, label }: { active?: boolean; payload?: A
         <div key={i} className="chart-tooltip__row">
           <div className="chart-tooltip__dot" style={{ background: entry.color }} />
           <span className="chart-tooltip__name">{entry.name}:</span>
-          <span className="chart-tooltip__value">{entry.value}</span>
+          <span className="chart-tooltip__value">{typeof entry.value === 'number' ? (Number.isInteger(entry.value) ? entry.value : entry.value.toFixed(1)) : entry.value}</span>
         </div>
       ))}
     </div>
@@ -169,12 +175,67 @@ function StatPill({ icon, value, label, color, bgColor }: {
   );
 }
 
+/* ═══════════════════════════════════════════════════════
+   Mini Sparkline — pure SVG, no library needed
+   ═══════════════════════════════════════════════════════ */
+function MiniSparkline({ data, width = 60, height = 20, color = '#10B981' }: {
+  data: number[];
+  width?: number;
+  height?: number;
+  color?: string;
+}) {
+  if (!data || data.length === 0) return null;
+  const max = Math.max(...data, 1);
+  const points = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - (v / max) * (height - 2) - 1;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }}>
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Custom Pie Chart Label
+   ═══════════════════════════════════════════════════════ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderPieLabel(props: any) {
+  const { cx, cy, midAngle, innerRadius, outerRadius, percent } = props;
+  if (!percent || percent < 0.05) return null;
+  const RADIAN = Math.PI / 180;
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={700}>
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+}
+
 export default function TasksTab() {
   const [data, setData] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [dataSource, setDataSource] = useState<'live' | 'sample'>('sample');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [includeSomeday, setIncludeSomeday] = useState(false);
+  const [excludeRecurringLive, setExcludeRecurringLive] = useState(true);
+
+  // Historic data from dedicated API
+  const [historicData, setHistoricData] = useState<HistoricData | null>(null);
+  const [historicLoading, setHistoricLoading] = useState(false);
+  const [excludeRecurring, setExcludeRecurring] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -205,22 +266,48 @@ export default function TasksTab() {
     fetchData();
   }, []);
 
+  // Fetch historic data when year or recurring filter changes
+  const fetchHistoric = useCallback(async (year: number, inclRecurring: boolean) => {
+    setHistoricLoading(true);
+    try {
+      const res = await fetch(
+        `${LIVE_API_URL}/api/tasks/historic?year=${year}&includeRecurring=${inclRecurring}`
+      );
+      if (res.ok) {
+        const d = await res.json();
+        setHistoricData(d);
+      }
+    } catch (err) {
+      console.error('Historic fetch failed:', err);
+    } finally {
+      setHistoricLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHistoric(selectedYear, !excludeRecurring);
+  }, [selectedYear, excludeRecurring, fetchHistoric]);
+
   /* ═══════════════════════════════════════════════════════
-     TASK FILTERING: exclude obsolete (always), someday (toggle)
+     TASK FILTERING: exclude obsolete (always), someday (toggle), recurring (toggle)
      ═══════════════════════════════════════════════════════ */
   const filteredData = useMemo(() => {
     if (!data) return null;
 
-    const shouldExclude = (tag?: string): boolean => {
-      if (!tag) return false;
-      const lower = tag.toLowerCase();
-      if (lower.includes('obsolete')) return true;
-      if (!includeSomeday && lower.includes('someday')) return true;
+    const shouldExclude = (t: Task): boolean => {
+      const tag = t.tag;
+      if (tag) {
+        const lower = tag.toLowerCase();
+        if (lower.includes('obsolete')) return true;
+        if (!includeSomeday && lower.includes('someday')) return true;
+      }
+      // Exclude recurring in live section if toggle is on
+      if (excludeRecurringLive && t.repeat && t.repeat !== '' && t.repeat !== 'None') return true;
       return false;
     };
 
-    const completed = data.completed.filter(t => !shouldExclude(t.tag));
-    const open = data.open.filter(t => !shouldExclude(t.tag));
+    const completed = data.completed.filter(t => !shouldExclude(t));
+    const open = data.open.filter(t => !shouldExclude(t));
 
     return {
       ...data,
@@ -229,13 +316,11 @@ export default function TasksTab() {
       totalOpen: open.length,
       totalCompleted: completed.length,
     };
-  }, [data, includeSomeday]);
+  }, [data, includeSomeday, excludeRecurringLive]);
 
   /* ═══════════════════════════════════════════════════════
      LIVE DATA COMPUTATIONS
      ═══════════════════════════════════════════════════════ */
-
-  /* ── Task Velocity: daily completions + 7-day moving average ── */
   const velocityData = useMemo(() => {
     if (!filteredData) return [];
     const now = new Date();
@@ -259,7 +344,6 @@ export default function TasksTab() {
     });
   }, [filteredData]);
 
-  /* ── Recent Closes: last 15 completed tasks ── */
   const recentCloses = useMemo(() => {
     if (!filteredData) return [];
     return [...filteredData.completed]
@@ -267,7 +351,6 @@ export default function TasksTab() {
       .slice(0, 15);
   }, [filteredData]);
 
-  /* ── New vs Retired: tasks created vs completed per week ── */
   const newVsRetired = useMemo(() => {
     if (!filteredData) return [];
     const now = new Date();
@@ -283,16 +366,11 @@ export default function TasksTab() {
       const created = allTasks.filter(t => t.added >= startTs && t.added < endTs).length;
       const retired = filteredData.completed.filter(t => t.completed >= startTs && t.completed < endTs).length;
 
-      weeks.push({
-        week: format(weekEnd, 'MMM d'),
-        created,
-        retired
-      });
+      weeks.push({ week: format(weekEnd, 'MMM d'), created, retired });
     }
     return weeks;
   }, [filteredData]);
 
-  /* ── Backlog Trend: estimated open count over last 60 days ── */
   const backlogData = useMemo(() => {
     if (!filteredData) return [];
     const now = new Date();
@@ -314,64 +392,11 @@ export default function TasksTab() {
       const completedToday = filteredData.completed.filter(t => t.completed >= dayStartTs && t.completed < dayEndTs).length;
 
       runningOpen += createdToday - completedToday;
-      points.push({
-        date: dayStr,
-        label: format(day, 'M/d'),
-        count: Math.max(0, runningOpen)
-      });
+      points.push({ date: dayStr, label: format(day, 'M/d'), count: Math.max(0, runningOpen) });
     }
     return points;
   }, [filteredData]);
 
-  /* ═══════════════════════════════════════════════════════
-     HISTORIC DATA COMPUTATIONS (Year-based)
-     ═══════════════════════════════════════════════════════ */
-
-  /* ── Filter tasks by selected year ── */
-  const yearlyTasks = useMemo(() => {
-    if (!filteredData) return [];
-    const start = startOfYear(new Date(selectedYear, 0, 1));
-    const end = endOfYear(new Date(selectedYear, 0, 1));
-    return filteredData.completed.filter(t => {
-      if (t.completed > 0) {
-        return isWithinInterval(fromUnixTime(t.completed), { start, end });
-      }
-      return false;
-    });
-  }, [filteredData, selectedYear]);
-
-  /* ── Folder breakdown ── */
-  const folderData = useMemo(() => {
-    if (!yearlyTasks.length) return [];
-    const folderCounts: Record<string, number> = {};
-    yearlyTasks.forEach(t => {
-      const folder = t.folder || 'Unfiled';
-      folderCounts[folder] = (folderCounts[folder] || 0) + 1;
-    });
-    return Object.entries(folderCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-  }, [yearlyTasks]);
-
-  /* ── Monthly productivity trend ── */
-  const monthlyData = useMemo(() => {
-    if (!yearlyTasks.length) return [];
-    const monthCounts: Record<string, number> = {};
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    // Initialize all months
-    months.forEach(m => { monthCounts[m] = 0; });
-    
-    yearlyTasks.forEach(t => {
-      const month = format(fromUnixTime(t.completed), 'MMM');
-      monthCounts[month] = (monthCounts[month] || 0) + 1;
-    });
-    
-    return months.map(name => ({ name, count: monthCounts[name] || 0 }));
-  }, [yearlyTasks]);
-
-  /* ── Summary stats ── */
   const stats = useMemo(() => {
     if (!filteredData) return { open: 0, closedWeek: 0, avgPerDay: '0', overdue: 0, dueToday: 0 };
     const nowTs = Math.floor(Date.now() / 1000);
@@ -385,21 +410,72 @@ export default function TasksTab() {
     const overdue = filteredData.open.filter(t => t.duedate && t.duedate < nowTs).length;
     const dueToday = filteredData.open.filter(t => t.duedate && t.duedate >= todayStart && t.duedate < todayEnd).length;
 
-    return {
-      open: filteredData.totalOpen,
-      closedWeek: closedThisWeek,
-      avgPerDay,
-      overdue,
-      dueToday,
-    };
+    return { open: filteredData.totalOpen, closedWeek: closedThisWeek, avgPerDay, overdue, dueToday };
   }, [filteredData]);
 
-  /* ── Yearly stats ── */
+  /* ═══════════════════════════════════════════════════════
+     HISTORIC DATA COMPUTATIONS (from API)
+     ═══════════════════════════════════════════════════════ */
+  const monthlyChartData = useMemo(() => {
+    if (!historicData) return [];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return historicData.monthlyBreakdown.map((m, i) => ({
+      name: months[i],
+      count: m.count,
+      avgDays: m.avgDaysToClose,
+    }));
+  }, [historicData]);
+
+  const folderDonutData = useMemo(() => {
+    if (!historicData) return [];
+    return historicData.folderBreakdown.map((f, i) => ({
+      name: f.name,
+      value: f.count,
+      color: COLORS[i % COLORS.length],
+    }));
+  }, [historicData]);
+
+  const priorityDonutData = useMemo(() => {
+    if (!historicData) return [];
+    return Object.entries(historicData.priorityBreakdown)
+      .filter(([, count]) => count > 0)
+      .map(([key, count]) => ({
+        name: PRIORITY_LABELS[key] || 'Unknown',
+        value: count,
+        color: PRIORITY_COLORS[key] || '#64748B',
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [historicData]);
+
+  const dayOfWeekData = useMemo(() => {
+    if (!historicData) return [];
+    return historicData.dayOfWeekBreakdown
+      .map((count, i) => ({ day: DOW_LABELS[i], count }))
+      .sort((a, b) => b.count - a.count);
+  }, [historicData]);
+
+  const completionSpeedData = useMemo(() => {
+    if (!historicData) return [];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return historicData.monthlyBreakdown
+      .filter(m => m.count > 0)
+      .map((m, i) => ({
+        name: months[m.month - 1],
+        avgDays: m.avgDaysToClose,
+        color: m.avgDaysToClose <= 7 ? '#10B981' : m.avgDaysToClose <= 30 ? '#FBBF24' : '#F87171',
+      }));
+  }, [historicData]);
+
   const yearlyStats = useMemo(() => {
-    const total = yearlyTasks.length;
-    const avgDaily = (total / 365).toFixed(1);
-    return { total, avgDaily, folders: folderData.length };
-  }, [yearlyTasks, folderData]);
+    if (!historicData) return { total: 0, avgDaily: '0' };
+    const daysInYear = selectedYear === new Date().getFullYear()
+      ? Math.floor((Date.now() - new Date(selectedYear, 0, 1).getTime()) / 86400000) || 1
+      : 365;
+    return {
+      total: historicData.totalCompleted,
+      avgDaily: (historicData.totalCompleted / daysInYear).toFixed(1),
+    };
+  }, [historicData, selectedYear]);
 
   if (loading) {
     return (
@@ -434,27 +510,20 @@ export default function TasksTab() {
         </div>
         <div className="tasks-header__right">
           <label className="someday-toggle" style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            cursor: 'pointer',
-            fontSize: '0.8rem',
-            color: '#94A3B8',
-            fontWeight: 600,
-            userSelect: 'none',
+            display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+            fontSize: '0.8rem', color: '#94A3B8', fontWeight: 600, userSelect: 'none',
           }}>
-            <input
-              type="checkbox"
-              checked={includeSomeday}
-              onChange={(e) => setIncludeSomeday(e.target.checked)}
-              style={{
-                accentColor: 'var(--emerald)',
-                width: '16px',
-                height: '16px',
-                cursor: 'pointer',
-              }}
-            />
+            <input type="checkbox" checked={includeSomeday} onChange={(e) => setIncludeSomeday(e.target.checked)}
+              style={{ accentColor: 'var(--emerald)', width: '16px', height: '16px', cursor: 'pointer' }} />
             Include Someday
+          </label>
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+            fontSize: '0.8rem', color: '#94A3B8', fontWeight: 600, userSelect: 'none',
+          }}>
+            <input type="checkbox" checked={excludeRecurringLive} onChange={(e) => setExcludeRecurringLive(e.target.checked)}
+              style={{ accentColor: 'var(--amber)', width: '16px', height: '16px', cursor: 'pointer' }} />
+            Exclude Recurring
           </label>
           <span className={`source-badge source-badge--${dataSource === 'live' ? 'live' : 'bundled'}`}>
             {dataSource === 'live' ? '🟢 Live' : '🟡 Sample Data'}
@@ -470,45 +539,11 @@ export default function TasksTab() {
          LIVE SECTION: Stats Bar
          ═══════════════════════════════════════════════════════ */}
       <div className="stats-bar">
-        <StatPill
-          icon={<FolderOpen size={18} />}
-          value={stats.open}
-          label="Open Tasks"
-          color="var(--amber)"
-          bgColor="var(--amber-dim)"
-        />
-        <StatPill
-          icon={<CheckCircle2 size={18} />}
-          value={stats.closedWeek}
-          label="Closed (7d)"
-          color="var(--emerald)"
-          bgColor="var(--emerald-dim)"
-        />
-        <StatPill
-          icon={<TrendingUp size={18} />}
-          value={stats.avgPerDay}
-          label="Per Day (avg)"
-          color="var(--sky)"
-          bgColor="var(--sky-dim)"
-        />
-        {stats.dueToday > 0 && (
-          <StatPill
-            icon={<Clock size={18} />}
-            value={stats.dueToday}
-            label="Due Today"
-            color="var(--amber)"
-            bgColor="var(--amber-dim)"
-          />
-        )}
-        {stats.overdue > 0 && (
-          <StatPill
-            icon={<AlertCircle size={18} />}
-            value={stats.overdue}
-            label="Overdue"
-            color="var(--red)"
-            bgColor="var(--red-dim)"
-          />
-        )}
+        <StatPill icon={<FolderOpen size={18} />} value={stats.open} label="Open Tasks" color="var(--amber)" bgColor="var(--amber-dim)" />
+        <StatPill icon={<CheckCircle2 size={18} />} value={stats.closedWeek} label="Closed (7d)" color="var(--emerald)" bgColor="var(--emerald-dim)" />
+        <StatPill icon={<TrendingUp size={18} />} value={stats.avgPerDay} label="Per Day (avg)" color="var(--sky)" bgColor="var(--sky-dim)" />
+        {stats.dueToday > 0 && <StatPill icon={<Clock size={18} />} value={stats.dueToday} label="Due Today" color="var(--amber)" bgColor="var(--amber-dim)" />}
+        {stats.overdue > 0 && <StatPill icon={<AlertCircle size={18} />} value={stats.overdue} label="Overdue" color="var(--red)" bgColor="var(--red-dim)" />}
       </div>
 
       {/* ═══════════════════════════════════════════════════════
@@ -526,33 +561,11 @@ export default function TasksTab() {
             <ResponsiveContainer width="100%" height={260}>
               <ComposedChart data={velocityData} barGap={0}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
-                  axisLine={false} tickLine={false}
-                  interval={4}
-                />
-                <YAxis
-                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
-                  axisLine={false} tickLine={false}
-                  allowDecimals={false}
-                />
+                <XAxis dataKey="label" tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} interval={4} />
+                <YAxis tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip content={<DarkTooltip />} />
-                <Bar
-                  dataKey="count"
-                  fill="var(--emerald)"
-                  radius={[4, 4, 0, 0]}
-                  name="Completed"
-                  maxBarSize={18}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="avg"
-                  stroke="var(--amber)"
-                  strokeWidth={2.5}
-                  dot={false}
-                  name="7-day avg"
-                />
+                <Bar dataKey="count" fill="var(--emerald)" radius={[4, 4, 0, 0]} name="Completed" maxBarSize={18} />
+                <Line type="monotone" dataKey="avg" stroke="var(--amber)" strokeWidth={2.5} dot={false} name="7-day avg" />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -591,21 +604,10 @@ export default function TasksTab() {
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={newVsRetired} barGap={4}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                <XAxis
-                  dataKey="week"
-                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
-                  axisLine={false} tickLine={false}
-                />
-                <YAxis
-                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
-                  axisLine={false} tickLine={false}
-                  allowDecimals={false}
-                />
+                <XAxis dataKey="week" tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip content={<DarkTooltip />} />
-                <Legend
-                  wrapperStyle={{ paddingTop: 8 }}
-                  formatter={(value) => <span style={{ color: '#94A3B8', fontWeight: 700, fontSize: '0.72rem' }}>{value}</span>}
-                />
+                <Legend wrapperStyle={{ paddingTop: 8 }} formatter={(value) => <span style={{ color: '#94A3B8', fontWeight: 700, fontSize: '0.72rem' }}>{value}</span>} />
                 <Bar dataKey="created" fill="var(--sky)" radius={[4, 4, 0, 0]} name="✦ Created" maxBarSize={24} />
                 <Bar dataKey="retired" fill="var(--emerald)" radius={[4, 4, 0, 0]} name="✓ Completed" maxBarSize={24} />
               </BarChart>
@@ -630,26 +632,10 @@ export default function TasksTab() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
-                  axisLine={false} tickLine={false}
-                  interval={9}
-                />
-                <YAxis
-                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
-                  axisLine={false} tickLine={false}
-                  domain={['dataMin - 10', 'dataMax + 10']}
-                />
+                <XAxis dataKey="label" tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} interval={9} />
+                <YAxis tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
                 <Tooltip content={<DarkTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="count"
-                  stroke="var(--amber)"
-                  strokeWidth={2.5}
-                  fill="url(#backlogGrad)"
-                  name="Open Tasks"
-                />
+                <Area type="monotone" dataKey="count" stroke="var(--amber)" strokeWidth={2.5} fill="url(#backlogGrad)" name="Open Tasks" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -669,12 +655,36 @@ export default function TasksTab() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════
-         HISTORIC SECTION: Year Selector & Stats
+         HISTORIC: Yearly Sparkline Row
+         ═══════════════════════════════════════════════════════ */}
+      {historicData && historicData.yearlyTotals.length > 0 && (
+        <div className="sparkline-row">
+          {historicData.yearlyTotals.map(yt => (
+            <button
+              key={yt.year}
+              className={`sparkline-pill ${selectedYear === yt.year ? 'sparkline-pill--active' : ''}`}
+              onClick={() => setSelectedYear(yt.year)}
+            >
+              <span className="sparkline-pill__year">{yt.year}</span>
+              <span className="sparkline-pill__count">{yt.count.toLocaleString()}</span>
+              <MiniSparkline
+                data={yt.monthly}
+                width={48}
+                height={16}
+                color={selectedYear === yt.year ? '#10B981' : '#64748B'}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
+         HISTORIC: Header with stats + recurring toggle
          ═══════════════════════════════════════════════════════ */}
       <div className="historic-header">
         <div className="historic-stats">
           <div className="historic-stat">
-            <span className="historic-stat__value">{yearlyStats.total}</span>
+            <span className="historic-stat__value">{yearlyStats.total.toLocaleString()}</span>
             <span className="historic-stat__label">Total Completed</span>
           </div>
           <div className="historic-stat">
@@ -682,20 +692,22 @@ export default function TasksTab() {
             <span className="historic-stat__label">Avg Per Day</span>
           </div>
           <div className="historic-stat">
-            <span className="historic-stat__value">{yearlyStats.folders}</span>
+            <span className="historic-stat__value">{historicData?.folderBreakdown.length || 0}</span>
             <span className="historic-stat__label">Active Folders</span>
           </div>
         </div>
-        <div className="year-selector">
-          {[2026, 2025, 2024].map(y => (
-            <button
-              key={y}
-              onClick={() => setSelectedYear(y)}
-              className={`year-btn ${selectedYear === y ? 'year-btn--active' : ''}`}
-            >
-              {y}
-            </button>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+            fontSize: '0.8rem', color: '#94A3B8', fontWeight: 600, userSelect: 'none',
+          }}>
+            <input type="checkbox" checked={excludeRecurring} onChange={(e) => setExcludeRecurring(e.target.checked)}
+              style={{ accentColor: 'var(--amber)', width: '16px', height: '16px', cursor: 'pointer' }} />
+            Exclude Recurring
+          </label>
+          {historicLoading && (
+            <RefreshCw size={16} style={{ color: '#64748B', animation: 'spin 1s linear infinite' }} />
+          )}
         </div>
       </div>
 
@@ -712,7 +724,7 @@ export default function TasksTab() {
           </div>
           <div className="bento-card__chart">
             <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={monthlyData}>
+              <AreaChart data={monthlyChartData}>
                 <defs>
                   <linearGradient id="productivityGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10B981" stopOpacity={0.25} />
@@ -720,63 +732,174 @@ export default function TasksTab() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
-                  axisLine={false} tickLine={false}
-                />
-                <YAxis
-                  tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }}
-                  axisLine={false} tickLine={false}
-                  allowDecimals={false}
-                />
+                <XAxis dataKey="name" tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip content={<DarkTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="count"
-                  stroke="var(--emerald)"
-                  strokeWidth={2.5}
-                  fill="url(#productivityGrad)"
-                  name="Completed"
-                />
+                <Area type="monotone" dataKey="count" stroke="var(--emerald)" strokeWidth={2.5} fill="url(#productivityGrad)" name="Completed" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Folder Breakdown */}
+        {/* Folder Breakdown — Donut Pie Chart */}
         <div className="bento-card bento-card--folders">
           <div className="bento-card__header">
             <FolderOpen size={20} style={{ color: 'var(--sky)' }} />
             <h2>Folder Breakdown</h2>
             <span className="bento-card__subtitle">{selectedYear}</span>
           </div>
-          <div className="folder-list">
-            {folderData.map((folder, i) => {
-              const percent = yearlyStats.total > 0 ? ((folder.count / yearlyStats.total) * 100).toFixed(0) : 0;
-              return (
-                <div key={folder.name} className="folder-item">
-                  <div className="folder-item__icon" style={{ backgroundColor: COLORS[i % COLORS.length] }}>
-                    {folder.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="folder-item__info">
-                    <span className="folder-item__name">{folder.name}</span>
-                    <span className="folder-item__count">{folder.count} tasks</span>
-                  </div>
-                  <div className="folder-item__bar">
-                    <div 
-                      className="folder-item__fill"
-                      style={{ 
-                        width: `${percent}%`,
-                        backgroundColor: COLORS[i % COLORS.length]
-                      }}
-                    />
-                  </div>
-                  <span className="folder-item__percent">{percent}%</span>
-                </div>
-              );
-            })}
+          <div className="bento-card__chart" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {folderDonutData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={folderDonutData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={100}
+                    paddingAngle={2}
+                    dataKey="value"
+                    labelLine={false}
+                    label={renderPieLabel}
+                  >
+                    {folderDonutData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} stroke="transparent" />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<DarkTooltip />} />
+                  <Legend
+                    layout="vertical"
+                    align="right"
+                    verticalAlign="middle"
+                    iconType="circle"
+                    iconSize={8}
+                    formatter={(value) => <span style={{ color: '#CBD5E1', fontSize: '0.75rem', fontWeight: 600 }}>{value}</span>}
+                  />
+                  {/* Center text */}
+                  <text x="50%" y="46%" textAnchor="middle" fill="#E2E8F0" fontSize={22} fontWeight={800}>
+                    {yearlyStats.total.toLocaleString()}
+                  </text>
+                  <text x="50%" y="56%" textAnchor="middle" fill="#64748B" fontSize={11} fontWeight={600}>
+                    tasks
+                  </text>
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p style={{ color: '#64748B', fontSize: '0.85rem' }}>No data</p>
+            )}
           </div>
+        </div>
+
+        {/* Completion Speed — Bar Chart */}
+        <div className="bento-card bento-card--speed">
+          <div className="bento-card__header">
+            <Gauge size={20} style={{ color: 'var(--amber)' }} />
+            <h2>Completion Speed</h2>
+            <span className="bento-card__subtitle">Avg days to close · {selectedYear}</span>
+          </div>
+          <div className="bento-card__chart">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={completionSpeedData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Atkinson Hyperlegible' }} axisLine={false} tickLine={false} allowDecimals={false} label={{ value: 'days', angle: -90, position: 'insideLeft', fill: '#475569', fontSize: 11 }} />
+                <Tooltip content={<DarkTooltip />} />
+                <Bar dataKey="avgDays" name="Avg Days" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                  {completionSpeedData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Priority Breakdown — Donut */}
+        <div className="bento-card bento-card--priority">
+          <div className="bento-card__header">
+            <Target size={20} style={{ color: '#F87171' }} />
+            <h2>Priority Breakdown</h2>
+            <span className="bento-card__subtitle">{selectedYear}</span>
+          </div>
+          <div className="bento-card__chart" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {priorityDonutData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={priorityDonutData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={100}
+                    paddingAngle={2}
+                    dataKey="value"
+                    labelLine={false}
+                    label={renderPieLabel}
+                  >
+                    {priorityDonutData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} stroke="transparent" />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<DarkTooltip />} />
+                  <Legend
+                    layout="vertical"
+                    align="right"
+                    verticalAlign="middle"
+                    iconType="circle"
+                    iconSize={8}
+                    formatter={(value) => <span style={{ color: '#CBD5E1', fontSize: '0.75rem', fontWeight: 600 }}>{value}</span>}
+                  />
+                  {/* Center: most common priority */}
+                  <text x="50%" y="46%" textAnchor="middle" fill="#E2E8F0" fontSize={16} fontWeight={800}>
+                    {priorityDonutData[0]?.name || ''}
+                  </text>
+                  <text x="50%" y="56%" textAnchor="middle" fill="#64748B" fontSize={11} fontWeight={600}>
+                    most common
+                  </text>
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p style={{ color: '#64748B', fontSize: '0.85rem' }}>No data</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+         Day-of-Week — Full width horizontal bars
+         ═══════════════════════════════════════════════════════ */}
+      <div className="bento-card" style={{ marginTop: '16px' }}>
+        <div className="bento-card__header">
+          <CalendarDays size={20} style={{ color: 'var(--sky)' }} />
+          <h2>Day of Week</h2>
+          <span className="bento-card__subtitle">Tasks completed by day · {selectedYear}</span>
+        </div>
+        <div style={{ padding: '16px 20px 12px' }}>
+          {dayOfWeekData.map((d, i) => {
+            const maxCount = dayOfWeekData[0]?.count || 1;
+            const pct = (d.count / maxCount) * 100;
+            return (
+              <div key={d.day} style={{
+                display: 'flex', alignItems: 'center', gap: '12px', marginBottom: i < dayOfWeekData.length - 1 ? '8px' : 0,
+              }}>
+                <span style={{ width: '36px', textAlign: 'right', color: '#94A3B8', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'Atkinson Hyperlegible' }}>
+                  {d.day}
+                </span>
+                <div style={{ flex: 1, height: '24px', borderRadius: '4px', background: 'rgba(148,163,184,0.06)', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${pct}%`, height: '100%', borderRadius: '4px',
+                    background: `linear-gradient(90deg, #38BDF8, #10B981)`,
+                    transition: 'width 0.6s ease',
+                    minWidth: d.count > 0 ? '4px' : '0',
+                  }} />
+                </div>
+                <span style={{ width: '48px', textAlign: 'right', color: '#E2E8F0', fontSize: '0.85rem', fontWeight: 700, fontFamily: 'Atkinson Hyperlegible' }}>
+                  {d.count.toLocaleString()}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -2398,9 +2398,65 @@ body {
   border-color: var(--emerald);
 }
 
+/* ── Sparkline Row ── */
+.sparkline-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148,163,184,0.15) transparent;
+}
+
+.sparkline-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+.sparkline-pill:hover {
+  background: var(--card-hover);
+  border-color: rgba(148,163,184,0.2);
+}
+
+.sparkline-pill--active {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.sparkline-pill__year {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.sparkline-pill__count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  min-width: 32px;
+  text-align: right;
+}
+
 /* ── Productivity Card ── */
 .bento-card--productivity { grid-column: span 7; }
 .bento-card--folders { grid-column: span 5; }
+.bento-card--speed { grid-column: span 7; }
+.bento-card--priority { grid-column: span 5; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 
 /* ── Folder List ── */
 .folder-list {
